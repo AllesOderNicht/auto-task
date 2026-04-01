@@ -48,16 +48,21 @@ for status_file in "$DEV_TASKS_DIR"/*/status.json; do
   task=$(jq -r '.task' "$status_file")
   current_ms=$(jq -r '.current_milestone' "$status_file")
   total_ms=$(jq -r '.total_milestones' "$status_file")
-  worktree=$(jq -r '.worktree_path' "$status_file")
-  branch=$(jq -r '.branch' "$status_file")
+  worktree=$(jq -r '.worktree_path // empty' "$status_file")
+  branch=$(jq -r '.branch // empty' "$status_file")
+  use_worktree=$(jq -r '.use_worktree // false' "$status_file")
   block_reason=$(jq -r '.block_reason // empty' "$status_file")
 
   echo "=== Dev Agent 任务进度 ==="
   echo "任务: $task"
   echo "阶段: $stage"
   echo "Milestone 进度: $current_ms / $total_ms"
-  if [ -n "$worktree" ] && [ "$worktree" != "" ] && [ "$worktree" != "null" ]; then
+  if [ "$use_worktree" = "true" ] && [ -n "$worktree" ] && [ "$worktree" != "null" ]; then
+    echo "模式: Worktree 隔离"
     echo "Worktree: $worktree"
+    echo "分支: $branch"
+  elif [ -n "$branch" ] && [ "$branch" != "null" ]; then
+    echo "模式: Feature Branch"
     echo "分支: $branch"
   fi
   if [ -n "$block_reason" ]; then
@@ -183,11 +188,12 @@ HOOKEOF
 chmod +x "$HOOKS_DIR/dev-guard-commit-msg.sh"
 
 ##############################################################################
-# Hook: dev-guard-worktree.sh
+# Hook: dev-guard-worktree.sh（可选，仅 --worktree 模式时由 init-dev 注册）
 ##############################################################################
 cat > "$HOOKS_DIR/dev-guard-worktree.sh" << 'HOOKEOF'
 #!/bin/bash
-# dev-guard-worktree.sh — 强制 worktree 隔离
+# dev-guard-worktree.sh — 强制 worktree 隔离（仅在启用 worktree 模式时生效）
+# 注意：此 hook 默认不注册，仅当用户在 init-dev 时选择 worktree 模式才会启用
 
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
@@ -334,11 +340,6 @@ mkdir -p .dev-tasks
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude-internal/hooks/dev-guard-worktree.sh",
-            "statusMessage": "检查 worktree 隔离..."
-          },
-          {
-            "type": "command",
             "command": "~/.claude-internal/hooks/dev-guard-commit-msg.sh",
             "statusMessage": "检查 commit message 规范..."
           }
@@ -360,12 +361,24 @@ mkdir -p .dev-tasks
 }
 ```
 
+**如果用户在 init-dev 时指定了 `--worktree` 参数**，则额外在 `PreToolUse` 的 `Bash` hooks 数组中追加：
+
+```json
+{
+  "type": "command",
+  "command": "~/.claude-internal/hooks/dev-guard-worktree.sh",
+  "statusMessage": "检查 worktree 隔离..."
+}
+```
+
 ### 5. 输出结果
 
 告诉用户：
 - Dev Agent 已在当前项目初始化
 - 已创建 `.dev-tasks/` 目录
-- 已生成 `.claude/settings.local.json`（含 worktree 隔离、commit 规范校验、上下文注入 hooks）
+- 已生成 `.claude/settings.local.json`（含 commit 规范校验、上下文注入 hooks）
+- 默认模式：直接在项目中使用 feature branch 开发
+- 如需 worktree 隔离模式，可运行 `/init-dev --worktree` 启用
 - 用法：在 `.dev-tasks/{task-name}/` 下创建 `README.md` 描述需求，然后运行 `/dev {task-name}`
 SKILLEOF
 
@@ -387,8 +400,22 @@ user-invocable: true
 以下路径由环境自动推断，无需硬编码：
 
 - **项目根目录**: `$CLAUDE_PROJECT_DIR`
-- **Worktree 根目录**: `$CLAUDE_PROJECT_DIR` 的同级目录，名为 `{项目文件夹名}-worktrees`
+- **Worktree 根目录**（仅 worktree 模式）: `$CLAUDE_PROJECT_DIR` 的同级目录，名为 `{项目文件夹名}-worktrees`
   - 例如 `~/code/my-app` 对应 `~/code/my-app-worktrees`
+
+## 工作模式
+
+Dev Agent 支持两种工作模式：
+
+### 默认模式（Feature Branch）
+- 直接在当前项目目录中创建 feature branch 进行开发
+- 分支命名：`dev/{task-name}`
+- 适合大多数场景，简单直接
+
+### Worktree 模式（需用户指定）
+- 仅当用户在 `/dev {task-name} --worktree` 中显式指定 `--worktree` 时启用
+- 在项目同级目录创建独立的 git worktree 进行隔离开发
+- 适合需要同时在主仓库工作、或多任务并行的场景
 
 ## 任务参数
 
@@ -444,7 +471,9 @@ user-invocable: true
 3. 不要在大纲中包含具体的文件名或实现细节
 4. 将大纲展示给用户，请用户确认或调整
 5. 用户确认后写入 outline.md，更新 status.json
-6. 创建 Worktree、安装依赖、拷贝环境文件
+6. 根据工作模式：
+   - **默认模式**：基于基准分支创建 `dev/{task-name}` 分支，切换到该分支
+   - **Worktree 模式**（`--worktree`）：创建 Worktree、安装依赖、拷贝环境文件
 7. 自动进入第一个 Milestone 的 detailing 阶段
 
 ### 3. detailing（生成 Detail Plan）
@@ -473,7 +502,7 @@ user-invocable: true
 
 ## 关键规则
 
-1. **所有代码操作必须在 worktree 目录内**
+1. **默认模式下在项目目录的 feature branch 中操作；worktree 模式下在 worktree 目录内操作**
 2. **每个 stage 变更必须立即写入 status.json**
 3. **编译以 todo 为单位**
 4. **不得自行修改大纲**
@@ -533,7 +562,7 @@ SKILLEOF
 ##############################################################################
 cat > "$SKILLS_DIR/archive-task/SKILL.md" << 'SKILLEOF'
 ---
-description: 将 .dev-tasks 中已完成的任务归档到 .history-tasks，并清理关联的 git worktree。当用户想要归档或清理已完成的开发任务时使用。
+description: 将 .dev-tasks 中已完成的任务归档到 .history-tasks，并清理关联的 git 分支或 worktree。当用户想要归档或清理已完成的开发任务时使用。
 user-invocable: true
 ---
 
@@ -549,7 +578,9 @@ user-invocable: true
 
 1. 扫描 `.dev-tasks/` 下 `stage === "done"` 的任务
 2. 移动到 `.history-tasks/`
-3. 清理关联的 worktree
+3. 根据任务的 `use_worktree` 字段：
+   - 如果为 `true`：清理关联的 worktree
+   - 如果为 `false` 或不存在：询问用户是否删除对应的 feature branch（`dev/{task-name}`）
 4. 输出结果
 SKILLEOF
 
@@ -601,7 +632,7 @@ echo ""
 echo "  Hooks (全局):"
 echo "    $HOOKS_DIR/dev-inject-context.sh"
 echo "    $HOOKS_DIR/dev-guard-commit-msg.sh"
-echo "    $HOOKS_DIR/dev-guard-worktree.sh"
+echo "    $HOOKS_DIR/dev-guard-worktree.sh (可选，仅 --worktree 模式启用)"
 echo ""
 echo "  Skills:"
 echo "    $SKILLS_DIR/init-dev/SKILL.md"
