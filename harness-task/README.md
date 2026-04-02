@@ -1,182 +1,90 @@
-# harness-task
+# Harness Task
 
-A structured development workflow plugin for **Claude Code** and **Cursor**. It tracks branch-based changes, captures prompts into files, and drives implementation through a single outlining stage, TDD, review, and verification.
+Structured 6-stage development workflow plugin for Claude Code and Cursor.
 
-## Overview
+## Workflow
 
-harness-task uses this flow:
-
-```text
-prompt.md -> brainstorming -> proposal.md + delta specs + phase plans -> per-phase TDD + handoff -> verify -> archive
+```
+init → prompting → refining → proposing → executing → verifying
 ```
 
-Start directly from `/alles-dev`.
-
-## Installation
-
-### Claude Code
-
-```bash
-claude plugin add /path/to/harness-task
-```
-
-### Cursor
-
-Add the plugin path in Cursor plugin settings, or copy the plugin directory into your Cursor plugins location.
+| Stage | Description |
+|-------|------------|
+| **init** | Create branch + directory + empty prompt.md |
+| **prompting** | User fills in prompt.md with requirements |
+| **refining** | Round 1 brainstorming: read code, ask >=5 questions, generate refined-prompt.md (no subagent) |
+| **proposing** | Round 2 brainstorming: subagent explores code, generate proposal.md + design.md + tasks.md |
+| **executing** | Execute phases with TDD, generate summaries, compress context between phases |
+| **verifying** | Final TDD verification + handoff |
 
 ## Quick Start
 
-### Start from the current branch
+1. Start a new development change:
+   ```
+   /alles-dev feature/my-change
+   ```
 
-```text
-/alles-dev
-```
+2. Fill in `prompt.md` with your requirements.
 
-If you omit the branch name, harness-task uses the current git branch.
-
-### Start from a specific branch
-
-```text
-/alles-dev feature/login-flow
-```
-
-If the branch exists, harness-task resumes that change. If it does not exist, the workflow creates it from the configured base branch at startup.
-
-### Start in a worktree
-
-```text
-/alles-dev feature/login-flow -w
-```
-
-Supported flags:
-- `-w`
-- `-worktree`
-- `--worktree`
-
-Worktrees are created under `../{project-name}-worktrees/{safe-branch-dir}/` during startup.
-
-## `prompt.md` First
-
-Every `/alles-dev` run ensures a `prompt.md` file exists inside the change directory.
-
-Before prompt capture, `/alles-dev` performs a startup hook:
-- resolve the effective target branch
-- if an explicit branch name was provided in default mode and the repo is not on it,
-  switch to it immediately, or create it from the base branch and switch to it
-- if worktree mode was requested, create or reuse the worktree immediately and bind it to the target branch
-- create `.dev-changes/{safe-branch-dir}/` if needed
-- create `prompt.md` if needed
-
-Two input flows are supported:
-- Conversation flow: the user describes the task in chat and the assistant writes it into `prompt.md`
-- Manual flow: the user edits `prompt.md` directly, then replies `已填写`; the assistant reads it and continues
-
-After the prompt is accepted, the assistant replies `已经填写`.
-
-## Directory Layout
-
-```text
-your-project/
-├── .dev-changes/
-│   ├── feature__login-flow/
-│   │   ├── prompt.md
-│   │   ├── proposal.md
-│   │   ├── status.json
-│   │   ├── specs/
-│   │   ├── phases/
-│   │   │   └── PH-1.md
-│   │   └── execution-log.md
-│   └── archive/
-└── .harness-task/
-    ├── context.md            # optional project conventions
-    ├── config.yaml           # optional build/test/base-branch/hooks config
-    ├── specs/                # optional main specs directory
-    └── templates/            # optional custom templates
-```
-
-Branch names are used as change identities. When a branch contains `/`, harness-task stores the change in a safe directory name such as `feature__login-flow`, while `status.json` keeps the original branch name.
-
-## Stages
-
-| Stage | What Happens |
-|-------|--------------|
-| `outlining` | Read `prompt.md`, brainstorm, write the merged `proposal.md`, generate delta specs, and produce one phase plan per phase |
-| `executing` | Implement exactly one phase at a time with strict TDD, then hand off the next phase through a compressed summary and a fresh execution context |
-| `verifying` | Run final checks and ask for validation |
-| `done` | Mark the change complete and ready to archive |
-
-## Phase Handoffs
-
-Each completed phase leaves behind:
-- one commit
-- one short compressed summary in `execution-log.md` and `status.json`
-- enough context for the parent agent to launch the next phase in a fresh execution context or `dev-executor` sub-agent
-
-The next phase should rely on its own phase plan plus compressed summaries of completed phases, not on the previous phase's full conversational context.
-
-## Optional Project Files
-
-You can use harness-task with zero setup, but these optional files make it smarter:
-
-- `.harness-task/context.md`: project conventions for planning and review
-- `.harness-task/config.yaml`: build/test/lint commands, base branch, and stage hooks
-- `.harness-task/specs/`: main specs merged with delta specs during archive or sync
-- `.harness-task/templates/`: custom templates for the merged proposal and detail plans
-
-Example `config.yaml`:
-
-```yaml
-project:
-  name: my-app
-
-commands:
-  build: npm run build
-  test: npm run test
-  lint: npm run lint
-
-git:
-  base_branch: main
-
-stage_hooks:
-  pre_executing: npm run lint
-  post_executing: npm run build && npm run test
-```
-
-If no config file exists, harness-task falls back to auto-detection from the project.
+3. The workflow guides you through brainstorming, planning, and execution automatically.
 
 ## Commands
 
 | Command | Description |
-|---------|-------------|
-| `/alles-dev [branch-name]` | Start or resume a branch-based development change |
-| `/alles-list-changes` | List active and archived changes |
-| `/alles-archive [branch-name]` | Archive a completed change and merge delta specs |
-| `/sync-specs [branch-name]` | Merge delta specs into `.harness-task/specs` without archiving |
-| `/review [branch-name]` | Run structured code review for a change |
-| `/templates` | Manage optional proposal/detail-plan templates |
+|---------|------------|
+| `/alles-dev [branch]` | Start or resume a development change |
+| `/alles-list-changes` | View all changes and their status |
+| `/alles-archive` | Archive a completed change |
+| `/review [branch]` | Structured code review |
 
-## Commit Convention
+## Task Directory Structure
 
-All commits during execution must follow:
+```
+.dev-changes/{branch-name}/
+  prompt.md              # Original user requirements
+  refined-prompt.md      # After round 1 brainstorming
+  proposal.md            # What and why (proposal)
+  design.md              # How (technical design)
+  tasks.md               # Phased task list
+  status.json            # Stage + phase progress
+  phases/
+    PH-1-summary.md      # Phase 1 completion summary
+    PH-2-summary.md      # Phase 2 completion summary
+```
 
-```text
+## Key Features
+
+- **Two-round brainstorming**: Round 1 asks structured questions to understand the problem. Round 2 uses subagent to explore code and generate a concrete proposal.
+- **Phased execution**: Tasks are split into independent phases. Each phase executes with TDD and produces a minimal summary.
+- **Context compression**: Between phases, only the proposal and completed phase summaries are carried forward. No context window bloat.
+- **Breakpoint resume**: Any interruption can be resumed. Status is persisted to `status.json` after every stage/phase change.
+- **TDD enforcement**: Every task follows Red-Green-Refactor. No production code without a failing test.
+
+## Configuration
+
+Create `.harness-task/config.yaml` in your project root for custom settings:
+
+```yaml
+# Build and test commands
+build_command: npm run build
+test_command: npm test
+
+# Base branch for new feature branches
+base_branch: main
+```
+
+Create `.harness-task/context.md` for project-specific context injected at session start.
+
+## Commit Format
+
+```
 {type}({scope}): description [{branch-name}]
 ```
 
-Types:
-- `feat`
-- `fix`
-- `refactor`
-- `chore`
-- `docs`
-- `style`
-- `perf`
-- `test`
-
 Examples:
-- `feat(auth): add JWT token validation [feature/login-flow]`
-- `test(api): add endpoint integration tests [feature/login-flow]`
-- `fix(ui): correct button alignment [fix/prompt-entry]`
+- `feat(auth): add login endpoint [feature/auth]`
+- `test(auth): add unit tests for login [feature/auth]`
+- `fix(api): handle null response [fix/null-response]`
 
 ## License
 

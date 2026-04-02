@@ -1,188 +1,186 @@
 ---
 name: brainstorming
-description: Use during outlining to explore requirements and draft the proposal content that anchors the planning package.
+description: Two-round structured brainstorming. Round 1 (refining) — no subagent, ask questions, generate refined-prompt.md. Round 2 (proposing) — subagent explores code, generate proposal.md + design.md + tasks.md.
 ---
 
-# Brainstorming Requirements Into Proposal Content
+# Brainstorming — Two-Round Design Process
 
-Help turn ideas into structured proposal content through focused collaborative dialogue.
+This skill drives two distinct brainstorming rounds. Each round has different tools, goals, and outputs.
 
-<HARD-GATE>
-You MUST complete ALL of the following before generating ANY proposal content or planning:
-1. Read prompt.md, project context, and RELEVANT SOURCE CODE first — understand the codebase yourself
-2. Present at least 5 unclear/ambiguous points to the user as MULTIPLE-CHOICE questions
-3. WAIT for the user to respond to those questions
-4. Propose 2-3 approaches and get the user's preference
-5. ONLY THEN generate proposal.md
+---
 
-Skipping ANY step — especially the 5-question discussion — is a CRITICAL VIOLATION.
-This applies to EVERY change regardless of perceived simplicity.
-Do NOT write any code or take any implementation action until the outlining package is confirmed.
-</HARD-GATE>
+## Round 1: Refining (stage = `refining`)
 
-<TOOL-BUDGET>
-Allowed:
-- Read prompt.md, context.md, specs/ files, templates
-- Read source code files DIRECTLY RELEVANT to the prompt (targeted reading, not blind exploration)
-- Dispatch ONE explore sub-agent if needed (for targeted code reading only)
+**Goal**: Deeply understand the user's intent and generate a comprehensive `refined-prompt.md`.
 
-Forbidden:
-- Blind exploration — do NOT grep/search the entire codebase without clear purpose
-- Do NOT read files unrelated to the prompt's scope
-- MUST NOT exceed 15 tool calls total for code reading
-</TOOL-BUDGET>
+**Constraints**: NO subagent. Work entirely in the current conversation context.
 
-## Process
+### Steps
 
-### Step 1. Understand Context
-- Read optional project context (`.harness-task/context.md`, `.harness-task/specs/`)
-- Read `.dev-changes/{safe-branch-dir}/prompt.md`
-- Read the user's requirement description
+1. **Read the codebase** — Before asking any questions, spend tool calls exploring the project:
+   - Read `prompt.md` to understand the user's raw request.
+   - Read key project files: `package.json`, `README.md`, config files, entry points.
+   - Scan directory structure to understand the project layout.
+   - Read source files most relevant to the prompt.
+   - Budget: use as many tool calls as needed to understand the project sufficiently.
 
-### Step 2. Read Relevant Code (DO THIS BEFORE ASKING QUESTIONS)
+2. **Ask at least 5 structured questions** — Based on your code reading and the prompt, present questions using the structured question tool (AskQuestion / multiple-choice format). Questions must:
+   - Be concrete, not vague. Reference specific files, APIs, or patterns you found.
+   - Cover: scope boundaries, technical approach, constraints, edge cases, priorities.
+   - Use multiple-choice options (2–5 per question) when possible.
+   - Be asked in a single batch, not one at a time.
 
-<READ-FIRST>
-You MUST read the relevant source code BEFORE asking the user any questions.
-Do NOT ask the user questions that you could answer by reading the code yourself.
+   Example question areas:
+   - "Which modules should be affected?" (with options based on actual code)
+   - "Should X behavior be preserved or changed?"
+   - "What's the priority: performance vs simplicity vs extensibility?"
+   - "Should this be backward-compatible?"
+   - "How should error cases be handled?"
 
-Bad example (asks user to explain what the code already shows):
-  "What is a pptw file? Where is it in the project?"
-  → You should have found this by reading the code.
+3. **Generate `refined-prompt.md`** — After receiving answers, create a comprehensive refined prompt:
 
-Good example (asks about decisions the code cannot answer):
-  "I see the pptw renderer uses Canvas API (src/renderer.ts:42). For the export,
-   should we: A) reuse Canvas rendering  B) use Playwright to render the full page
-   C) other?"
-  → This requires a human decision about approach.
-</READ-FIRST>
+   ```markdown
+   # Refined Prompt
 
-- Identify source code files directly relevant to the prompt
-- Read them with targeted purpose — understand existing behavior, interfaces, and constraints
-- Build a mental model of the relevant parts of the codebase
-- Do NOT blindly explore the entire codebase; stay within the prompt's scope
+   - Branch: `{branch-name}`
+   - Original Prompt: `prompt.md`
 
-### Step 3. Discuss Unclear Points (MANDATORY — at least 5 MULTIPLE-CHOICE questions)
+   ## Context
+   <!-- Project context discovered during code reading -->
 
-<STOP-AND-ASK>
-After reading code, you MUST stop here and present at least 5 unclear or ambiguous
-points to the user. You are FORBIDDEN from generating proposal.md, phase plans,
-or any planning content until the user has answered these questions.
+   ## Requirements
+   <!-- Consolidated from original prompt + Q&A answers -->
 
-If you cannot identify 5 points, you have not read the prompt or code carefully enough.
-Go back and re-read.
-</STOP-AND-ASK>
+   ### Functional Requirements
+   <!-- What the system should do -->
 
-<QUESTION-FORMAT>
-EVERY question MUST be in multiple-choice format. This is mandatory, not optional.
+   ### Non-Functional Requirements
+   <!-- Constraints, performance, compatibility -->
 
-Format each question as:
-```
-**{N}. {Question text that shows you understood the code}**
-   A) {Option — with brief explanation}
-   B) {Option — with brief explanation}
-   C) {Option — with brief explanation}
-   D) 其他（请说明）
-```
+   ## Scope
+   ### In Scope
+   <!-- Explicitly included -->
 
-Rules:
-- Each question MUST have 2-4 concrete options PLUS a free-input "其他" option
-- Options should reflect YOUR understanding from reading the code — show the user you did the homework
-- Questions must be about DECISIONS (approach, scope, behavior) — NOT about facts you could find in code
-- Lead with a brief context sentence referencing specific code you read (file, function, line) so the user knows you understand the codebase
-- The user should be able to answer most questions by just typing "1A 2B 3C 4A 5B" — make it that easy
+   ### Out of Scope
+   <!-- Explicitly excluded -->
 
-BAD questions (things you should figure out yourself by reading code):
-- "What is X? Where is it in the project?" → Read the code.
-- "What framework does the frontend use?" → Read package.json.
-- "How does the existing feature work?" → Read the source.
+   ## Key Decisions
+   <!-- Decisions made during Q&A -->
+   - Q: {question} → A: {answer} → Decision: {what this means for implementation}
+   ```
 
-GOOD questions (decisions that require human judgment):
-- "The export could be triggered from: A) toolbar button B) right-click menu C) API endpoint D) 其他"
-- "I found the renderer uses Canvas. For PDF export: A) reuse Canvas output B) Playwright full-page screenshot C) 其他"
-- "Error handling for failed exports: A) toast notification B) retry dialog C) silent log + download retry D) 其他"
-</QUESTION-FORMAT>
+4. **Update status.json** — Set stage to `proposing`.
 
-Questions may cover:
-  - Implementation approach decisions with trade-offs discovered in the code
-  - Feature scope boundaries (must-have vs nice-to-have)
-  - UX decisions (trigger method, output format, error feedback)
-  - Edge cases found in the existing code
-  - Performance vs quality trade-offs
-  - Compatibility concerns with existing architecture
+### Round 1 Checklist
 
-**Rules for this step:**
-- Present all 5+ questions at once as a numbered list
-- **ALL questions MUST be multiple-choice** — no open-ended questions
-- **WAIT** for the user to respond — do NOT proceed until they answer
-- If the user's response raises new questions, ask follow-ups (also in multiple-choice format)
+- [ ] Read project structure and relevant source code
+- [ ] Read prompt.md
+- [ ] Ask >= 5 structured questions in a single batch
+- [ ] Receive all answers
+- [ ] Generate refined-prompt.md
+- [ ] Update status.json to `proposing`
 
-### Step 4. Propose 2-3 Approaches
-- Based on the user's answers, present 2-3 overall implementation approaches
-- Each approach: 1-2 sentence summary, key trade-offs, your recommendation
-- Format as options (方案 A / 方案 B / 方案 C) so the user can pick easily
-- Wait for the user to indicate their preference
+---
 
-### Step 5. Generate `proposal.md`
+## Round 2: Proposing (stage = `proposing`)
 
-<PREREQUISITE-CHECK>
-Before generating proposal.md, verify you have completed:
-- [x] Read prompt.md and relevant source code (Step 1-2)
-- [x] Asked at least 5 multiple-choice questions AND received user answers (Step 3)
-- [x] Proposed approaches AND received user preference (Step 4)
+**Goal**: Generate `proposal.md`, `design.md`, and `tasks.md` with concrete implementation plans.
 
-If ANY checkbox is not met, GO BACK to the missing step. Do NOT proceed.
-</PREREQUISITE-CHECK>
+**Constraints**: USE subagent to explore code. Compress round 1 context first.
 
-Once all prerequisites are met:
+### Context Compression
 
-1. Check if `.harness-task/templates/proposal.md` exists in the project
-2. Use `.harness-task/templates/proposal.md` if it exists
-3. If it doesn't exist, use the built-in default format below:
+Before starting round 2, compress the round 1 context:
+- Do NOT carry the full round 1 conversation history.
+- Read `refined-prompt.md` as the authoritative input.
+- Summarize any round 1 context into a short paragraph, then proceed with round 2 work.
 
-```markdown
-## Why
-{Motivation — what problem does this solve?}
+### Steps
 
-## What Changes
-{Specific changes being made}
+1. **Read `refined-prompt.md`** — This is your single source of truth for requirements.
 
-### New Capabilities
-- `{name}`: {description}
+2. **Explore code with subagent** — Launch subagent(s) to explore the codebase:
+   - Use `explore` type subagents to investigate different code areas in parallel.
+   - Areas to explore: source code structure, existing patterns, test infrastructure, dependencies, config.
+   - Each subagent should return: key files found, patterns observed, potential impact areas.
 
-### Modified Capabilities
-- `{existing-name}`: {what's changing}
+3. **Synthesize and generate three files**:
 
-### Removed Capabilities
-- `{name}`: {why it's being removed}
+   **`proposal.md`** — What and Why:
+   ```markdown
+   # Proposal: {title}
 
-## Scope
-### Included
-{What's in scope}
+   ## Goal
+   <!-- What this change achieves -->
 
-### Excluded
-{What's explicitly out of scope}
+   ## Background
+   <!-- Current state and why change is needed -->
 
-## Acceptance Criteria
-- [ ] {Criterion 1}
-- [ ] {Criterion 2}
+   ## Changes Overview
+   <!-- High-level summary of what will change -->
 
-## Phase Outline
-### Phase PH-{n}: {title}
-- Goal: {one sentence}
-- Verification: {how to verify}
-```
+   ## Impact
+   <!-- What's affected: files, APIs, behavior -->
 
-### Step 6. Write and Hand Off
-- **MUST** write the file to `.dev-changes/{safe-branch-dir}/proposal.md`
-- Ensure it is ready to be presented together with delta specs and phase plans
-- proposal.md is a mandatory output — NEVER skip writing this file
+   ## Risks
+   <!-- What could go wrong and mitigation -->
+   ```
 
-## Key Principles
+   **`design.md`** — How:
+   ```markdown
+   # Design: {title}
 
-- **Read code first, ask questions second** — never ask the user about things you can find in the code
-- **All questions must be multiple-choice** — the user should be able to answer by picking options (e.g. "1A 2B 3C 4A 5B")
-- **5-question minimum is non-negotiable** — no proposal without user-answered questions
-- **proposal.md is a mandatory artifact** — always write it to disk before proceeding
-- **YAGNI ruthlessly** — remove unnecessary scope
-- **Explore alternatives** — always offer 2-3 approaches
-- **No implementation before confirmation** — the full outlining package is the gate
+   ## Architecture
+   <!-- Key architectural decisions -->
+
+   ## Technical Approach
+   <!-- Implementation strategy -->
+
+   ## Interface Changes
+   <!-- API/interface modifications -->
+
+   ## Data Flow
+   <!-- How data moves through the system -->
+
+   ## Dependencies
+   <!-- External dependencies, if any -->
+   ```
+
+   **`tasks.md`** — Execution Plan:
+   ```markdown
+   # Tasks
+
+   ## Phase 1: {title}
+   - [ ] 1.1 {specific task with file paths}
+   - [ ] 1.2 {another specific task}
+
+   ## Phase 2: {title}
+   - [ ] 2.1 {specific task}
+   - [ ] 2.2 {another specific task}
+
+   ## Phase 3: {title}
+   - [ ] 3.1 {specific task}
+   ```
+
+   Task writing rules:
+   - Each phase should be completable independently.
+   - Each task should reference specific files or modules.
+   - Each task should be small enough to implement and test in one TDD cycle.
+   - Order phases by dependency: foundational work first.
+
+4. **Update status.json** — Parse phases from `tasks.md`, populate the phases array, keep stage as `proposing`.
+
+5. **Wait for user confirmation** — Present the proposal summary and ask the user to confirm before proceeding. Only after confirmation, set stage to `executing`.
+
+### Round 2 Checklist
+
+- [ ] Compress round 1 context
+- [ ] Read refined-prompt.md
+- [ ] Launch subagent(s) to explore codebase
+- [ ] Generate proposal.md
+- [ ] Generate design.md
+- [ ] Generate tasks.md with phased plan
+- [ ] Update status.json with parsed phases
+- [ ] Present summary to user
+- [ ] Receive user confirmation
+- [ ] Update status.json stage to `executing`

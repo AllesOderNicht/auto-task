@@ -1,10 +1,18 @@
 import { join } from 'node:path';
 const SAFE_SEGMENT_PATTERN = /[^A-Za-z0-9._-]+/g;
 const EDGE_SEPARATOR_PATTERN = /^[_\-.]+|[_\-.]+$/g;
+const ARTIFACT_FILES = {
+    'prompt': 'prompt.md',
+    'refined-prompt': 'refined-prompt.md',
+    'proposal': 'proposal.md',
+    'design': 'design.md',
+    'tasks': 'tasks.md',
+    'status': 'status.json',
+};
 export function getChangeDirName(branchName) {
     const normalized = branchName
         .trim()
-        .replace(/[\\/]+/g, '__')
+        .replace(/[\\/]+/g, '-')
         .replace(SAFE_SEGMENT_PATTERN, '_')
         .replace(EDGE_SEPARATOR_PATTERN, '');
     return normalized || 'change';
@@ -12,8 +20,14 @@ export function getChangeDirName(branchName) {
 export function getChangeDirPath(projectDir, branchName) {
     return join(projectDir, '.dev-changes', getChangeDirName(branchName));
 }
-export function getPromptPath(changeDir) {
-    return join(changeDir, 'prompt.md');
+export function getArtifactPath(changeDir, artifact) {
+    return join(changeDir, ARTIFACT_FILES[artifact]);
+}
+export function getPhaseSummaryPath(changeDir, phaseId) {
+    return join(changeDir, 'phases', `${phaseId}-summary.md`);
+}
+export function getPhasesDir(changeDir) {
+    return join(changeDir, 'phases');
 }
 export function createPromptTemplate(branchName) {
     return [
@@ -22,7 +36,20 @@ export function createPromptTemplate(branchName) {
         `- Branch: \`${branchName}\``,
         '',
         '## Requirement',
-        '<!-- Fill this file manually, or answer in chat and the assistant will write it here. -->',
+        '',
+        '<!-- Describe what you want to build or change. -->',
+        '',
+    ].join('\n');
+}
+export function createPhaseSummaryTemplate(phaseId, phaseTitle) {
+    return [
+        `# ${phaseId}: ${phaseTitle}`,
+        '',
+        '## Files Changed',
+        '',
+        '| File | Change |',
+        '|------|--------|',
+        '<!-- | path/to/file.ts | One-line description | -->',
         '',
     ].join('\n');
 }

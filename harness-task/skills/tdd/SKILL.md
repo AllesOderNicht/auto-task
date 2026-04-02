@@ -1,72 +1,59 @@
 ---
 name: tdd
-description: Use when implementing any feature or bugfix during the executing stage. Enforces Red-Green-Refactor cycle. No production code without a failing test.
+description: Test-Driven Development enforcement. Red-Green-Refactor cycle for each task within a phase.
 ---
 
-# Test-Driven Development (TDD)
+# TDD — Test-Driven Development
 
-## The Iron Law
+This skill enforces the Red-Green-Refactor cycle during the `executing` stage. Every task within a phase must follow this discipline.
 
-```
-NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
-```
+## The Cycle
 
-Write code before the test? Delete it. Start over. No exceptions.
+### 1. RED — Write a Failing Test
 
-## Red-Green-Refactor Cycle
+- Write a test that describes the expected behavior for the current task.
+- The test MUST fail when run. If it passes, your test is wrong — it's not testing new behavior.
+- Run the test and confirm the failure message matches expectations.
 
-### RED — Write Failing Test
-- One minimal test showing what should happen
-- Clear name describing behavior
-- Real code, no mocks unless unavoidable
+### 2. GREEN — Make It Pass
 
-### Verify RED — Watch It Fail
-**MANDATORY. Never skip.**
-- Test fails (not errors)
-- Failure message is expected
-- Fails because feature missing (not typos)
+- Write the **minimal** production code to make the failing test pass.
+- Do not over-engineer. Do not add code "for later". Just make the test green.
+- Run the test and confirm it passes.
+- Run the full test suite to ensure nothing else broke.
 
-### GREEN — Minimal Code
-- Write simplest code to pass the test
-- Don't add features beyond the test
-- Don't refactor yet
+### 3. REFACTOR — Clean Up
 
-### Verify GREEN — Watch It Pass
-**MANDATORY.**
-- Test passes
-- Other tests still pass
-- No warnings or errors
+- Improve the code without changing behavior. Tests must stay green.
+- Apply: extract functions, rename for clarity, remove duplication.
+- Run full test suite after refactoring.
 
-### REFACTOR — Clean Up
-After green only:
-- Remove duplication
-- Improve names
-- Extract helpers
-- Keep tests green
+## Rules
 
-## Common Rationalizations
+1. **No production code without a failing test** — this is the cardinal rule.
+2. **One behavior per cycle** — don't test multiple things at once.
+3. **Run tests after every step** — RED, GREEN, and REFACTOR each require a test run.
+4. **Keep tests fast** — unit tests should complete in seconds.
+5. **Test names describe behavior** — `it('returns error when input is empty')` not `it('test1')`.
 
-| Excuse | Reality |
-|--------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
-| "I'll test after" | Tests passing immediately prove nothing. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "Test hard = skip it" | Hard to test = hard to use. Fix the design. |
-| "TDD will slow me down" | TDD is faster than debugging. |
-| "Just this once" | That's rationalization. Follow the cycle. |
+## Build & Test Commands
 
-## Integration with Harness-Task
+Check `.harness-task/config.yaml` for project-specific commands. Fallback detection:
 
-- Use test commands from `.harness-task/config.yaml` when present; otherwise auto-detect from the project
-- Each phase plan follows Red-Green-Refactor
-- Commit after each completed phase
-- Log results and the compressed handoff summary in `execution-log.md`
+| File Present | Test Command | Build Command |
+|-------------|-------------|---------------|
+| `package.json` | `npm test` or `npx vitest run` | `npm run build` |
+| `Cargo.toml` | `cargo test` | `cargo build` |
+| `go.mod` | `go test ./...` | `go build ./...` |
+| `pyproject.toml` | `pytest` | — |
 
-## Red Flags — STOP and Start Over
+## Integration with Phase Execution
 
-- Code before test
-- Test passes immediately (you're testing existing behavior)
-- Can't explain why test failed
-- Rationalizing "just this once"
+When invoked from `harness-task:executing`:
 
-**All of these mean: Delete code. Start over with TDD.**
+1. Receive the current task description.
+2. Execute one RED-GREEN-REFACTOR cycle for that task.
+3. Return control to the executing skill.
+
+Each completed TDD cycle should result in a commit:
+`{type}({scope}): description [{branch-name}]`

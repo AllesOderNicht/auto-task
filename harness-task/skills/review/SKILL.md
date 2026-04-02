@@ -1,150 +1,77 @@
 ---
 name: review
-description: Structured code review with 5 dimensions. Invoked automatically after executing stage completes, or standalone via /review {branch-name}.
+description: Structured code review with multiple dimensions. Can be invoked after execution completes or standalone.
+user-invocable: true
 ---
 
-# Code Review — 5-Dimension Structured Review
+# Review — Structured Code Review
 
-Perform a structured self-review of all changes made during the executing stage (or on demand). The review ensures implementation quality before entering the verifying stage.
+Review a development change across multiple dimensions.
 
-## When Invoked
+## When to Use
 
-- **Automatically**: After all phases in the executing stage complete, before entering verifying
-- **Standalone**: User runs `/review {branch-name}` or omits it to use the current branch
+- After all phases of execution complete (before or during `verifying` stage).
+- Standalone via `/review {branch-name}`.
 
-## Environment
+## Review Dimensions
 
-- **Change directory**: Resolve the safe directory name from the target branch, then read `.dev-changes/{safe-branch-dir}/`
-- **Proposal**: `.dev-changes/$ARGUMENTS/proposal.md`
-- **Delta specs**: `.dev-changes/$ARGUMENTS/specs/`
-- **Phase plans**: `.dev-changes/$ARGUMENTS/phases/`
-- **Execution log**: `.dev-changes/$ARGUMENTS/execution-log.md`
+### 1. Proposal Coverage
 
-## Review Process
+- Does the implementation match what `proposal.md` specified?
+- Are all requirements from `refined-prompt.md` addressed?
+- Are there unplanned additions or missing pieces?
 
-### Step 1: Gather Context
+### 2. Code Quality
 
-1. Read `proposal.md` — acceptance criteria, scope, and phase outline
-2. Read all phase plans in `phases/`
-3. Read all delta specs in `specs/`
-4. Read `execution-log.md` — what was actually done
-5. Run `git diff {base-branch}...HEAD` to see all changes
+- Is the code clean, readable, and maintainable?
+- Are naming conventions consistent?
+- Is there unnecessary duplication?
+- Are error cases handled?
 
-### Step 2: Evaluate 5 Dimensions
+### 3. Test Coverage
 
-#### Dimension 1: Proposal Coverage
+- Does every behavior have a corresponding test?
+- Are edge cases covered?
+- Do tests follow TDD patterns (descriptive names, single assertion focus)?
 
-Check that every acceptance criterion in `proposal.md` maps to actual implementation.
+### 4. Phase Summaries
 
-- List each criterion from `## Acceptance Criteria`
-- For each, identify the implementing code/test
-- Flag any criterion without a clear implementation as **Critical**
+- Do phase summaries accurately reflect the changes?
+- Is anything missing from the file change lists?
 
-#### Dimension 2: Code Quality
+### 5. Security & Safety
 
-Review all changed files for:
+- Are there hardcoded secrets or credentials?
+- Are user inputs validated?
+- Are there potential injection vectors?
 
-- **Patterns**: Consistent with project conventions in `.harness-task/context.md` when present
-- **Error handling**: All error paths covered, no swallowed errors
-- **Naming**: Clear, consistent, follows project conventions
-- **Duplication**: No copy-paste code that should be extracted
-- **Complexity**: Functions/methods not too long, single responsibility
-
-#### Dimension 3: Test Coverage
-
-For every new function, method, or behavior:
-
-- Verify a corresponding test exists
-- Check edge cases are tested (null, empty, boundary values)
-- Verify error paths have tests
-- Flag any untested public function/behavior as **Important**
-
-#### Dimension 4: Delta Spec Consistency
-
-Compare delta specs against actual implementation:
-
-- Every ADDED requirement should have corresponding new code
-- Every MODIFIED requirement should show the change in code
-- Every REMOVED requirement should have corresponding deletions
-- Flag any mismatch as **Important**
-
-#### Dimension 5: Security & Safety
-
-Scan for common security issues:
-
-- No hardcoded secrets, API keys, or credentials
-- No unsafe `eval()`, `exec()`, or equivalent
-- Input validation on user-facing interfaces
-- No SQL injection vectors (parameterized queries)
-- No path traversal vulnerabilities
-- Dependencies are from trusted sources
-- No overly permissive file/network access
-
-### Step 3: Generate Report
-
-Output the review as a structured report:
+## Output Format
 
 ```markdown
-# Code Review: {branch-name}
+# Code Review: {change-name}
 
 ## Summary
-{1-2 sentence overall assessment}
+<!-- 2-3 sentence overview -->
 
 ## Dimension Scores
-| Dimension | Status | Issues |
-|-----------|--------|--------|
-| Proposal Coverage | PASS/FAIL | {count} |
-| Code Quality | PASS/WARN | {count} |
-| Test Coverage | PASS/FAIL | {count} |
-| Delta Spec Consistency | PASS/WARN | {count} |
-| Security & Safety | PASS/FAIL | {count} |
 
-## Critical Issues
-{Must be resolved before verifying}
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Proposal Coverage | {pass/partial/fail} | {brief note} |
+| Code Quality | {pass/partial/fail} | {brief note} |
+| Test Coverage | {pass/partial/fail} | {brief note} |
+| Phase Summaries | {pass/partial/fail} | {brief note} |
+| Security | {pass/partial/fail} | {brief note} |
 
-### CRIT-{n}: {title}
-- **Dimension**: {dimension}
-- **Location**: `{file}:{line}`
-- **Description**: {what's wrong}
-- **Fix**: {suggested fix}
+## Issues Found
+<!-- List any issues, grouped by severity -->
 
-## Important Issues
-{Should be resolved, but non-blocking}
+### Critical
+<!-- Must fix before merge -->
 
-### IMP-{n}: {title}
-- **Dimension**: {dimension}
-- **Location**: `{file}:{line}`
-- **Description**: {what's wrong}
-- **Fix**: {suggested fix}
-
-## Suggestions
-{Nice to have improvements}
-
-### SUG-{n}: {title}
-- **Description**: {suggestion}
+### Suggestions
+<!-- Nice to have improvements -->
 
 ## Verdict
-{PASS | PASS WITH WARNINGS | BLOCKED}
+<!-- APPROVE / REQUEST_CHANGES / NEEDS_DISCUSSION -->
 ```
-
-### Step 4: Handle Verdict
-
-- **PASS**: Proceed to verifying stage
-- **PASS WITH WARNINGS**: Proceed, but note warnings for user
-- **BLOCKED**: Critical issues found — present to user, fix issues, then re-review
-
-## Issue Severity Guide
-
-| Severity | Criteria | Blocks Verifying? |
-|----------|----------|-------------------|
-| **Critical** | Missing acceptance criteria, security vulnerability, broken functionality | Yes |
-| **Important** | Missing tests, spec mismatch, code quality concern | No (but flagged) |
-| **Suggestion** | Style improvement, potential optimization, documentation | No |
-
-## Key Rules
-
-1. **Always read the actual diff** — don't rely on execution log alone
-2. **Check every acceptance criterion** — this is the primary gate
-3. **Critical issues block transition** — user must acknowledge
-4. **Be specific** — include file paths, line numbers, code snippets
-5. **Suggest fixes** — don't just identify problems, propose solutions

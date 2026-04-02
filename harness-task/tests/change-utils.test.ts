@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPromptTemplate, getChangeDirName } from '../src/utils/change.js';
-import { createInitialStatus, getNextStage, STAGE_ORDER } from '../src/utils/status.js';
+import {
+  getChangeDirName,
+  getArtifactPath,
+  getPhaseSummaryPath,
+  createPromptTemplate,
+  createPhaseSummaryTemplate,
+} from '../src/utils/change.js';
 
 describe('getChangeDirName', () => {
-  it('replaces branch separators with double underscores', () => {
-    expect(getChangeDirName('feature/login-flow')).toBe('feature__login-flow');
+  it('replaces branch separators with hyphens', () => {
+    expect(getChangeDirName('feature/login-flow')).toBe('feature-login-flow');
   });
 
   it('replaces unsafe filesystem characters', () => {
@@ -15,46 +20,50 @@ describe('getChangeDirName', () => {
   it('falls back to a default name when normalization is empty', () => {
     expect(getChangeDirName('///')).toBe('change');
   });
-});
 
-describe('createInitialStatus', () => {
-  it('stores the original branch and the safe directory name', () => {
-    const status = createInitialStatus('feature/login-flow', {
-      useWorktree: true,
-      worktreePath: '/tmp/worktree',
-      promptReady: true,
-    });
+  it('handles whitespace-only input', () => {
+    expect(getChangeDirName('   ')).toBe('change');
+  });
 
-    expect(status.change).toBe('feature/login-flow');
-    expect(status.change_dir).toBe('feature__login-flow');
-    expect(status.branch).toBe('feature/login-flow');
-    expect(status.use_worktree).toBe(true);
-    expect(status.worktree_path).toBe('/tmp/worktree');
-    expect(status.prompt_ready).toBe(true);
-    expect(status.stage).toBe('outlining');
+  it('handles complex branch names', () => {
+    expect(getChangeDirName('feat/add-auth/v2')).toBe('feat-add-auth-v2');
   });
 });
 
-describe('workflow stages', () => {
-  it('uses outlining as the only planning stage', () => {
-    expect(STAGE_ORDER).toEqual(['outlining', 'executing', 'verifying', 'done']);
+describe('getArtifactPath', () => {
+  it('returns correct path for each artifact type', () => {
+    const dir = '/project/.dev-changes/my-branch';
+    expect(getArtifactPath(dir, 'prompt')).toBe(`${dir}/prompt.md`);
+    expect(getArtifactPath(dir, 'refined-prompt')).toBe(`${dir}/refined-prompt.md`);
+    expect(getArtifactPath(dir, 'proposal')).toBe(`${dir}/proposal.md`);
+    expect(getArtifactPath(dir, 'design')).toBe(`${dir}/design.md`);
+    expect(getArtifactPath(dir, 'tasks')).toBe(`${dir}/tasks.md`);
+    expect(getArtifactPath(dir, 'status')).toBe(`${dir}/status.json`);
   });
+});
 
-  it('advances directly from outlining to executing', () => {
-    expect(getNextStage('outlining')).toBe('executing');
-    expect(getNextStage('executing')).toBe('verifying');
-    expect(getNextStage('verifying')).toBe('done');
-    expect(getNextStage('done')).toBeNull();
+describe('getPhaseSummaryPath', () => {
+  it('returns path under phases/ directory', () => {
+    const dir = '/project/.dev-changes/my-branch';
+    expect(getPhaseSummaryPath(dir, 'PH-1')).toBe(`${dir}/phases/PH-1-summary.md`);
+    expect(getPhaseSummaryPath(dir, 'PH-3')).toBe(`${dir}/phases/PH-3-summary.md`);
   });
 });
 
 describe('createPromptTemplate', () => {
-  it('includes the branch name and requirement placeholder', () => {
+  it('includes branch name and requirement section', () => {
     const template = createPromptTemplate('feature/login-flow');
-
     expect(template).toContain('# Prompt');
     expect(template).toContain('- Branch: `feature/login-flow`');
     expect(template).toContain('## Requirement');
-    expect(template).toContain('Fill this file manually');
+  });
+});
+
+describe('createPhaseSummaryTemplate', () => {
+  it('generates a summary template with phase title', () => {
+    const template = createPhaseSummaryTemplate('PH-1', 'Setup project structure');
+    expect(template).toContain('# PH-1: Setup project structure');
+    expect(template).toContain('## Files Changed');
+    expect(template).toContain('| File | Change |');
   });
 });

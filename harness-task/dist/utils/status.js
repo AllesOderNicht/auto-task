@@ -1,24 +1,20 @@
-import { getChangeDirName } from './change.js';
 export const STAGE_ORDER = [
-    'outlining',
+    'init',
+    'prompting',
+    'refining',
+    'proposing',
     'executing',
     'verifying',
-    'done',
 ];
-export function createInitialStatus(branchName, options = {}) {
+export function createInitialStatus(branchName, changeDir) {
     return {
-        change: branchName,
-        change_dir: getChangeDirName(branchName),
-        stage: 'outlining',
         branch: branchName,
-        use_worktree: options.useWorktree ?? false,
-        worktree_path: options.worktreePath ?? null,
-        prompt_ready: options.promptReady ?? false,
-        current_milestone: null,
-        total_milestones: 0,
-        milestones: [],
+        change_dir: changeDir,
+        stage: 'init',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        current_phase: null,
+        phases: [],
     };
 }
 export function updateStage(status, newStage) {
@@ -28,42 +24,55 @@ export function updateStage(status, newStage) {
         updated_at: new Date().toISOString(),
     };
 }
-export function updateMilestoneProgress(status, milestoneId, completedTodo) {
-    const milestones = status.milestones.map(ms => {
-        if (ms.id === milestoneId) {
-            const completed = [...ms.completed_todos, completedTodo];
-            return {
-                ...ms,
-                completed_todos: completed,
-                status: (completed.length >= ms.total_todos ? 'done' : 'current'),
-            };
-        }
-        return ms;
-    });
-    // Find next milestone if current is done
-    const currentMs = milestones.find(ms => ms.id === milestoneId);
-    let currentMilestone = status.current_milestone;
-    if (currentMs && currentMs.status === 'done') {
-        const nextPending = milestones.find(ms => ms.status === 'pending');
-        if (nextPending) {
-            nextPending.status = 'current';
-            currentMilestone = nextPending.id;
-        }
-    }
-    return {
-        ...status,
-        milestones,
-        current_milestone: currentMilestone,
-        updated_at: new Date().toISOString(),
-    };
-}
-export function isStageComplete(status) {
-    return status.stage === 'done';
-}
 export function getNextStage(current) {
     const idx = STAGE_ORDER.indexOf(current);
     if (idx === -1 || idx >= STAGE_ORDER.length - 1)
         return null;
     return STAGE_ORDER[idx + 1];
+}
+export function isComplete(status) {
+    return status.stage === 'verifying' &&
+        status.phases.length > 0 &&
+        status.phases.every(p => p.status === 'completed');
+}
+export function setPhases(status, phases) {
+    return {
+        ...status,
+        phases,
+        current_phase: phases.length > 0 ? phases[0].id : null,
+        updated_at: new Date().toISOString(),
+    };
+}
+export function advancePhase(status, completedPhaseId, summaryFile) {
+    const phases = status.phases.map(p => {
+        if (p.id === completedPhaseId) {
+            return { ...p, status: 'completed', summary_file: summaryFile };
+        }
+        return p;
+    });
+    const nextPending = phases.find(p => p.status === 'pending');
+    if (nextPending) {
+        nextPending.status = 'in_progress';
+    }
+    return {
+        ...status,
+        phases,
+        current_phase: nextPending?.id ?? null,
+        updated_at: new Date().toISOString(),
+    };
+}
+export function startPhase(status, phaseId) {
+    const phases = status.phases.map(p => {
+        if (p.id === phaseId) {
+            return { ...p, status: 'in_progress' };
+        }
+        return p;
+    });
+    return {
+        ...status,
+        phases,
+        current_phase: phaseId,
+        updated_at: new Date().toISOString(),
+    };
 }
 //# sourceMappingURL=status.js.map

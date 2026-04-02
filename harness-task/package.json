@@ -1,7 +1,7 @@
 {
   "name": "harness-task",
-  "version": "1.0.0",
-  "description": "Structured development workflow plugin for Claude Code and Cursor",
+  "version": "2.0.0",
+  "description": "Structured 6-stage development workflow plugin for Claude Code and Cursor",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

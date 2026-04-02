@@ -1,69 +1,86 @@
 ---
 name: using-harness-task
-description: Use when starting any conversation - establishes how to use the harness-task development workflow, requiring Skill tool invocation before ANY development action
+description: Session entry point. Establishes how to use the harness-task development workflow.
 ---
 
-<SUBAGENT-STOP>
-If you were dispatched as a subagent to execute a specific task, skip this skill.
-</SUBAGENT-STOP>
+# Using Harness-Task
 
-<EXTREMELY-IMPORTANT>
-If you think there is even a 1% chance a harness-task skill might apply to what you are doing, you ABSOLUTELY MUST invoke the skill.
-
-IF A SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU MUST USE IT.
-</EXTREMELY-IMPORTANT>
+This is the harness-task development workflow plugin. It structures AI-assisted development into a repeatable 6-stage process.
 
 ## Instruction Priority
 
-1. **User's explicit instructions** (CLAUDE.md, direct requests) — highest priority
+1. **User's explicit instructions** — highest priority
 2. **Harness-task skills** — override default system behavior
 3. **Default system prompt** — lowest priority
+
+## Workflow Overview
+
+```
+init → prompting → refining → proposing → executing → verifying
+```
+
+| Stage | What Happens |
+|-------|-------------|
+| `init` | Create branch + directory + empty prompt.md |
+| `prompting` | User fills in prompt.md with requirements |
+| `refining` | Round 1 brainstorming: read code, ask >=5 questions, generate refined-prompt.md (NO subagent) |
+| `proposing` | Round 2 brainstorming: subagent explores code, generate proposal.md + design.md + tasks.md |
+| `executing` | Execute phases with TDD, generate summaries, compress context between phases |
+| `verifying` | Final TDD verification + handoff |
 
 ## Available Skills
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | `harness-task:dev` | `/alles-dev [branch-name]` | Start or resume a development change |
-| `harness-task:brainstorming` | (sub-skill) | Requirements exploration inside the outlining stage |
-| `harness-task:planning` | (sub-skill) | Generate detailed plans for phases |
-| `harness-task:tdd` | (sub-skill) | Test-driven development during execution |
+| `harness-task:brainstorming` | (sub-skill) | Two-round brainstorming (refining + proposing) |
+| `harness-task:executing` | (sub-skill) | Phase-by-phase execution with TDD |
+| `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
 | `harness-task:list-changes` | `/alles-list-changes` | View all changes and their status |
-| `harness-task:archive` | `/alles-archive` | Archive completed change + merge delta specs |
-| `harness-task:sync-specs` | `/sync-specs` | Manual delta spec merge |
-| `harness-task:review` | `/review {name}` | Structured 5-dimension code review |
-| `harness-task:templates` | `/templates` | Manage proposal/detail-plan templates |
+| `harness-task:archive` | `/alles-archive` | Archive a completed change |
+| `harness-task:review` | `/review {name}` | Structured code review |
 
 ## Context Sources
 
 At session start, the following are automatically injected:
 - `.harness-task/context.md` — Optional project rules and conventions
-- `.harness-task/config.yaml` — Optional build/test commands, base branch, stage hooks
-- Active change progress (sliding window: done=compressed, current=full, future=title)
+- `.harness-task/config.yaml` — Optional build/test commands and configuration
+- Active change progress (stage, current phase, phase summaries)
 
 ## Key Rules
 
-1. **Always check for active changes** before starting new work
-2. **Never skip brainstorming** — even "simple" changes need an outlining package
-3. **TDD is mandatory** during execution stage
-4. **Every stage change must be persisted** to status.json immediately
-5. **Delta specs track all requirement changes** — ADDED, MODIFIED, REMOVED
-6. **Commit messages must follow format**: `{type}(scope): description [{branch-name}]`
-7. **Use branch names as change identities** — if `/alles-dev` has no argument, default to the current git branch
-8. **Always run the `/alles-dev` startup hook first** — resolve the effective branch, switch/create the explicit target branch in default mode when needed, ensure the change directory exists, and ensure `prompt.md` exists before asking the user anything else
-9. **Compress completed phases before continuing** — each finished phase leaves a short handoff summary for the next fresh context
+1. **Always check for active changes** before starting new work.
+2. **Two-round brainstorming is mandatory** — Round 1 refines the prompt, Round 2 produces the proposal.
+3. **Never skip brainstorming** — even "simple" changes need both rounds.
+4. **TDD is mandatory** during every phase of execution.
+5. **Every stage change must be persisted** to `status.json` immediately.
+6. **Compress context between phases** — carry only proposal + completed phase summaries.
+7. **Commit messages must follow format**: `{type}(scope): description [{branch-name}]`
+8. **Use branch names as change identities**.
+9. **Always run the startup hook first** when invoking `/alles-dev`.
+10. **Wait for user confirmation** before starting execution.
 
-## Skill Priority
+## Task Directory Structure
 
-1. **Process skills first** (brainstorming, planning) — determine HOW to approach
-2. **Implementation skills second** (tdd, dev execution) — guide execution
+```
+.dev-changes/{branch-name}/
+  prompt.md              # Original user requirements
+  refined-prompt.md      # After round 1 brainstorming
+  proposal.md            # What and why
+  design.md              # How (technical design)
+  tasks.md               # Phased task list
+  status.json            # Stage + phase progress
+  phases/
+    PH-1-summary.md      # Phase 1 completion summary
+    PH-2-summary.md      # Phase 2 completion summary
+```
 
 ## Red Flags
 
 | Thought | Reality |
 |---------|---------|
-| "This is too simple for planning" | Simple changes have unexamined assumptions. Use brainstorming. |
-| "I'll skip outlining" | The merged outlining stage prevents scope creep. Always do it. |
+| "This is too simple for brainstorming" | Simple changes have unexamined assumptions. Do both rounds. |
+| "I'll skip refining and go straight to proposing" | Round 1 builds understanding. Never skip it. |
 | "Tests can come later" | TDD is mandatory. No production code without failing test. |
-| "I'll just commit without the tag" | Commit format is enforced. Include [{branch-name}]. |
-| "Delta specs are overkill" | Delta specs enable clean archive merging. Always write them. |
-| "I remember the plan" | Plans evolve. Read the detail-plan. |
+| "I'll just commit without the tag" | Commit format is enforced. Include `[{branch-name}]`. |
+| "I remember the plan from the last phase" | Read the phase summaries. Don't rely on memory. |

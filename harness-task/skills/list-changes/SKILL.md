@@ -1,36 +1,33 @@
 ---
 name: list-changes
-description: Scan .dev-changes directory and display all development changes with their status, progress, and metadata.
+description: Scan .dev-changes directory and display all development changes with their status and progress.
 user-invocable: true
 ---
 
-# List Development Changes
+# List Changes — View All Development Changes
 
-Scan `.dev-changes/` and `.dev-changes/archive/` to display all changes.
+Scan `.dev-changes/` and display a summary of all active and archived changes.
 
-## Execution
+## Output Format
 
-### 1. Scan Active Changes
+```markdown
+## Active Changes
 
-Read `.dev-changes/*/status.json` for each non-archive subdirectory.
+| Branch | Stage | Current Phase | Progress |
+|--------|-------|---------------|----------|
+| feature/auth | executing | PH-2 | 1/3 phases |
+| fix/bug-123 | refining | — | — |
 
-### 2. Scan Archived Changes
+## Archived Changes
 
-Read `.dev-changes/archive/*/status.json` or list archive directories.
-
-### 3. Display Table
-
-Format output as a table:
-
-```
-| Change | Stage | Branch | Progress | Updated |
-|--------|-------|--------|----------|---------|
-| {branch-name} | executing | feature/login-flow | PH-2/5 | 2h ago |
-| {branch-name} | done | fix/prompt-flow | complete (5/5 phases) | 1d ago |
+| Branch | Archived Date | Phases |
+|--------|--------------|--------|
+| feature/login | 2026-03-15 | 4 |
 ```
 
-### 4. Summary
+## How It Works
 
-- Total active changes
-- Changes ready to archive (stage=done)
-- Blocked changes (if any)
+1. Scan `.dev-changes/*/status.json` for active changes (stage != archived).
+2. Scan `.dev-changes/archive/*/status.json` for archived changes.
+3. For each change, extract: branch, stage, current phase, total phases, completed phases.
+4. Display in a formatted table.

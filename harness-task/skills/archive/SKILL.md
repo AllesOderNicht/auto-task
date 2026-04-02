@@ -1,56 +1,53 @@
 ---
 name: archive
-description: Archive a completed development change. Merges delta specs into `.harness-task/specs/`, moves the change to archive, and cleans up git branch/worktree.
+description: Archive a completed development change. Moves the change directory to archive with a date prefix.
 user-invocable: true
 ---
 
-# Archive Completed Change
+# Archive — Complete and Archive a Change
 
-Archive a completed change and merge its delta specs into the main `.harness-task/specs/` directory.
+Archive a development change that has reached the `verifying` stage with all phases completed.
 
-## Parameters
+## Prerequisites
 
-- `$ARGUMENTS`: Git branch name to archive. If empty, use the current branch or list archivable changes.
+- The change must be in `verifying` stage.
+- All phases must have `completed` status.
+- All tests must pass.
 
-## Execution Flow
+## Steps
 
-### 1. Validate
+1. **Validate** — Read `status.json` and verify:
+   - `stage` is `verifying`.
+   - All phases have `status: "completed"`.
+   - Run the test suite to confirm everything passes.
 
-- Resolve the safe directory name from the target branch, then read `.dev-changes/{safe-branch-dir}/status.json`
-- Verify `stage === "done"`
-- If not done, show current stage and suggest completing the change first
+2. **Archive** — Move the change directory:
+   ```
+   .dev-changes/{branch-dir}/  →  .dev-changes/archive/YYYY-MM-DD-{branch-dir}/
+   ```
 
-### 2. Preview Delta Spec Merge
+3. **Clean up branch** (optional) — Ask the user if they want to:
+   - Delete the feature branch.
+   - Keep the branch for further work.
 
-For each spec file in `.dev-changes/{safe-branch-dir}/specs/`:
-- Parse delta format (ADDED/MODIFIED/REMOVED Requirements)
-- Show preview of what will change in `.harness-task/specs/`:
-  - New specs to be created
-  - Existing specs to be updated (show diff)
-  - Requirements to be removed
-- Ask user to confirm merge
+4. **Report** — Show the user:
+   - What was archived.
+   - Where the archive is located.
+   - Branch cleanup status.
 
-### 3. Execute Merge
+## Archive Structure
 
-For each delta spec:
-- **ADDED Requirements**: Append to target spec's Requirements section. If target spec doesn't exist, create it.
-- **MODIFIED Requirements**: Find matching requirement by name in target spec, replace content.
-- **REMOVED Requirements**: Find matching requirement by name in target spec, remove it.
-
-### 4. Move to Archive
-
-```bash
-mv .dev-changes/{safe-branch-dir} .dev-changes/archive/{YYYY-MM-DD}-{safe-branch-dir}
 ```
-
-### 5. Clean Up Git
-
-Based on `status.json`:
-- If `use_worktree: true`: Remove worktree and branch
-- If branch-based mode: Ask user if they want to delete the tracked branch
-
-### 6. Output Summary
-
-- List all merged spec changes
-- Archive location
-- Cleaned up resources
+.dev-changes/
+  archive/
+    2026-04-02-feature-auth/
+      prompt.md
+      refined-prompt.md
+      proposal.md
+      design.md
+      tasks.md
+      status.json
+      phases/
+        PH-1-summary.md
+        PH-2-summary.md
+```

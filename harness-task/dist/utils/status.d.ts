@@ -1,34 +1,26 @@
-export type Stage = 'outlining' | 'executing' | 'verifying' | 'done';
+export type Stage = 'init' | 'prompting' | 'refining' | 'proposing' | 'executing' | 'verifying';
 export declare const STAGE_ORDER: Stage[];
-export interface MilestoneStatus {
+export type PhaseStatus = 'pending' | 'in_progress' | 'completed';
+export interface PhaseProgress {
     id: string;
     title: string;
-    status: 'done' | 'current' | 'pending';
-    total_todos: number;
-    completed_todos: string[];
+    status: PhaseStatus;
+    summary_file?: string;
 }
 export interface ChangeStatus {
-    change: string;
+    branch: string;
     change_dir: string;
     stage: Stage;
-    branch: string;
-    use_worktree: boolean;
-    worktree_path: string | null;
-    prompt_ready: boolean;
-    current_milestone: string | null;
-    total_milestones: number;
-    milestones: MilestoneStatus[];
     created_at: string;
     updated_at: string;
+    current_phase: string | null;
+    phases: PhaseProgress[];
 }
-export interface CreateInitialStatusOptions {
-    useWorktree?: boolean;
-    worktreePath?: string | null;
-    promptReady?: boolean;
-}
-export declare function createInitialStatus(branchName: string, options?: CreateInitialStatusOptions): ChangeStatus;
+export declare function createInitialStatus(branchName: string, changeDir: string): ChangeStatus;
 export declare function updateStage(status: ChangeStatus, newStage: Stage): ChangeStatus;
-export declare function updateMilestoneProgress(status: ChangeStatus, milestoneId: string, completedTodo: string): ChangeStatus;
-export declare function isStageComplete(status: ChangeStatus): boolean;
 export declare function getNextStage(current: Stage): Stage | null;
+export declare function isComplete(status: ChangeStatus): boolean;
+export declare function setPhases(status: ChangeStatus, phases: PhaseProgress[]): ChangeStatus;
+export declare function advancePhase(status: ChangeStatus, completedPhaseId: string, summaryFile: string): ChangeStatus;
+export declare function startPhase(status: ChangeStatus, phaseId: string): ChangeStatus;
 //# sourceMappingURL=status.d.ts.map

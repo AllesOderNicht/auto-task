@@ -1,7 +1,7 @@
 {
   "name": "harness-task",
-  "description": "Structured development workflow plugin: prompt → brainstorming → proposal + delta specs + phase plans → TDD execution → verify → archive with spec merge",
-  "version": "1.0.0",
+  "description": "Structured 6-stage development workflow: init → prompting → refining → proposing → executing → verifying. Two-round brainstorming, phased TDD execution, and context compression.",
+  "version": "2.0.0",
   "author": {
     "name": "harness-task"
   },
@@ -9,10 +9,8 @@
   "keywords": [
     "dev-workflow",
     "tdd",
-    "spec-driven",
-    "milestone-tracking",
-    "delta-specs",
     "brainstorming",
-    "planning"
+    "phased-execution",
+    "context-compression"
   ]
 }
