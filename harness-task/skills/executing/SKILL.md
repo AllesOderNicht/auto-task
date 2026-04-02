@@ -1,11 +1,11 @@
 ---
 name: executing
-description: Phase executor. Runs each phase with TDD, generates summaries, compresses context between phases.
+description: Phase executor. Runs each phase with TDD, generates summaries, triggers adversarial review, compresses context between phases.
 ---
 
 # Executing — Phase-by-Phase Implementation
 
-This skill drives the `executing` stage. It processes one phase at a time, enforcing TDD and generating summaries.
+This skill drives the `executing` stage. It processes one phase at a time, enforcing TDD, generating summaries, and triggering adversarial code review before advancing.
 
 ## Phase Execution Loop
 
@@ -35,6 +35,7 @@ For each task in the current phase:
    - **REFACTOR**: Clean up while keeping tests green.
 2. **Commit** after each task or logical group:
    - Format: `{type}({scope}): description [{branch-name}]`
+3. **Per-task review (large phases only)**: If the phase has > 8 changed files, invoke `harness-task:phase-review` after each task's TDD cycle. See Step 4.5 for details.
 
 ### 4. Update Status with Summary
 
@@ -42,6 +43,24 @@ After all tasks in a phase are complete, update `status.json`:
 - Mark phase as `completed`.
 - Write a **minimal** `summary` string: file changes with one-line descriptions, pipe-separated.
   Example: `"src/auth.ts: added login handler | tests/auth.test.ts: login unit tests"`
+
+### 4.5. Phase Review — Adversarial Code Evaluation
+
+**Invoke `harness-task:phase-review`** to trigger an isolated, adversarial code review.
+
+**Review granularity** depends on the number of files changed in this phase:
+- **<= 8 files changed**: Review the entire phase at once (after Step 4, before Step 5).
+- **> 8 files changed**: Review was already triggered per-task during Step 3.
+
+**What happens during review:**
+1. A new `phase-reviewer` subagent is spawned with isolated context (prompt.md + proposal.md + production code diff ONLY — no test code, no conversation history).
+2. The reviewer scores the code across 6 weighted dimensions (Proposal Alignment, Code Quality, Test Coverage, Security, Performance, Plan Compliance).
+3. If the weighted average score >= 7.0/10: **PASS** — proceed to Step 5.
+4. If score < 7.0: The reviewer fixes the code, then a **new** reviewer subagent re-evaluates (up to 3 rounds).
+5. If all 3 rounds fail: **ESCALATE** — halt and present the user with score history and critical issues.
+
+**After review passes**, update `status.json`:
+- Record `review_score` and `review_round` on the phase.
 - If more phases remain: advance `current_phase` to the next pending phase.
 - If all phases complete: update stage to `verifying`.
 
@@ -57,6 +76,7 @@ Before starting the next phase:
 - If a build breaks, fix it before marking the phase complete.
 - If blocked, update `status.json` and report to the user — do not improvise.
 - If the task plan needs adjustment, discuss with the user first.
+- If a review escalation occurs, halt execution and wait for user decision before proceeding.
 
 ## Bug Reports
 
@@ -87,5 +107,6 @@ If execution was interrupted (conversation ended mid-phase):
 2. **TDD is mandatory** — no production code without a failing test first.
 3. **Commit after each task** — small, atomic commits.
 4. **Minimal summaries** — file changes + one-line descriptions only.
-5. **Context compression is mandatory** — never carry full context between phases.
-6. **User can abort** — if the user says stop, persist current progress and stop.
+5. **Review is mandatory** — every phase must pass adversarial review before advancing.
+6. **Context compression is mandatory** — never carry full context between phases.
+7. **User can abort** — if the user says stop, persist current progress and stop.

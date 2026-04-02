@@ -10,6 +10,7 @@ import {
   advancePhase,
   startPhase,
   resetToPhase,
+  updatePhaseReview,
 } from '../src/utils/status.js';
 
 describe('STAGE_ORDER', () => {
@@ -130,6 +131,30 @@ describe('advancePhase', () => {
     expect(updated.phases[0].status).toBe('completed');
     expect(updated.current_phase).toBeNull();
   });
+
+  it('records review_score and review_round when provided', () => {
+    let status = createInitialStatus('b', 'd');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'in_progress' },
+      { id: 'PH-2', title: 'B', status: 'pending' },
+    ]);
+
+    const updated = advancePhase(status, 'PH-1', 'done', 7.36, 2);
+    expect(updated.phases[0].review_score).toBe(7.36);
+    expect(updated.phases[0].review_round).toBe(2);
+    expect(updated.phases[0].status).toBe('completed');
+  });
+
+  it('omits review fields when not provided', () => {
+    let status = createInitialStatus('b', 'd');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'in_progress' },
+    ]);
+
+    const updated = advancePhase(status, 'PH-1', 'done');
+    expect(updated.phases[0].review_score).toBeUndefined();
+    expect(updated.phases[0].review_round).toBeUndefined();
+  });
 });
 
 describe('startPhase', () => {
@@ -218,5 +243,45 @@ describe('resetToPhase', () => {
 
     const updated = resetToPhase(status, 'PH-1');
     expect(updated.stage).toBe('executing');
+  });
+});
+
+describe('updatePhaseReview', () => {
+  it('records review score and round on a phase', () => {
+    let status = createInitialStatus('b', 'd');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'in_progress' },
+      { id: 'PH-2', title: 'B', status: 'pending' },
+    ]);
+
+    const updated = updatePhaseReview(status, 'PH-1', 7.5, 1);
+    expect(updated.phases[0].review_score).toBe(7.5);
+    expect(updated.phases[0].review_round).toBe(1);
+    expect(updated.phases[0].status).toBe('in_progress');
+  });
+
+  it('does not alter other phases', () => {
+    let status = createInitialStatus('b', 'd');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'completed', summary: 's1' },
+      { id: 'PH-2', title: 'B', status: 'in_progress' },
+    ]);
+
+    const updated = updatePhaseReview(status, 'PH-2', 6.0, 2);
+    expect(updated.phases[0].review_score).toBeUndefined();
+    expect(updated.phases[1].review_score).toBe(6.0);
+    expect(updated.phases[1].review_round).toBe(2);
+  });
+
+  it('overwrites previous review data', () => {
+    let status = createInitialStatus('b', 'd');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'in_progress' },
+    ]);
+
+    let updated = updatePhaseReview(status, 'PH-1', 5.0, 1);
+    updated = updatePhaseReview(updated, 'PH-1', 7.5, 2);
+    expect(updated.phases[0].review_score).toBe(7.5);
+    expect(updated.phases[0].review_round).toBe(2);
   });
 });

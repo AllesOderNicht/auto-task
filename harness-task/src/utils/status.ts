@@ -22,6 +22,8 @@ export interface PhaseProgress {
   title: string;
   status: PhaseStatus;
   summary?: string;
+  review_score?: number;
+  review_round?: number;
 }
 
 export interface ChangeStatus {
@@ -75,10 +77,22 @@ export function setPhases(status: ChangeStatus, phases: PhaseProgress[]): Change
   };
 }
 
-export function advancePhase(status: ChangeStatus, completedPhaseId: string, summary: string): ChangeStatus {
+export function advancePhase(
+  status: ChangeStatus,
+  completedPhaseId: string,
+  summary: string,
+  reviewScore?: number,
+  reviewRound?: number,
+): ChangeStatus {
   const phases = status.phases.map(p => {
     if (p.id === completedPhaseId) {
-      return { ...p, status: 'completed' as PhaseStatus, summary };
+      return {
+        ...p,
+        status: 'completed' as PhaseStatus,
+        summary,
+        ...(reviewScore !== undefined ? { review_score: reviewScore } : {}),
+        ...(reviewRound !== undefined ? { review_round: reviewRound } : {}),
+      };
     }
     return p;
   });
@@ -108,6 +122,30 @@ export function startPhase(status: ChangeStatus, phaseId: string): ChangeStatus 
     ...status,
     phases,
     current_phase: phaseId,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Record review score and round on a phase without changing its status.
+ * Used during the review loop before the phase is marked completed.
+ */
+export function updatePhaseReview(
+  status: ChangeStatus,
+  phaseId: string,
+  reviewScore: number,
+  reviewRound: number,
+): ChangeStatus {
+  const phases = status.phases.map(p => {
+    if (p.id === phaseId) {
+      return { ...p, review_score: reviewScore, review_round: reviewRound };
+    }
+    return p;
+  });
+
+  return {
+    ...status,
+    phases,
     updated_at: new Date().toISOString(),
   };
 }

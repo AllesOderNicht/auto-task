@@ -65,8 +65,15 @@ init → prompting → refining → proposing → executing → verifying
   1. Load context: `proposal.md` + completed phase summaries from `status.json`.
   2. Read the current phase's plan from `phases/PH-{n}.md`.
   3. Execute tasks with TDD (invoke `harness-task:tdd`).
-  4. Update `status.json`: mark phase completed, write summary string, advance to next.
-  5. Compress context before starting next phase.
+  4. Update `status.json`: mark phase completed, write summary string.
+  5. **Adversarial review** (invoke `harness-task:phase-review`):
+     - A `phase-reviewer` subagent is spawned with isolated context (only prompt.md + proposal.md + production code diff).
+     - The reviewer scores the code across 6 weighted dimensions (7.0/10 pass threshold).
+     - If score < 7.0: reviewer fixes code, a new reviewer re-evaluates (up to 3 rounds).
+     - If 3 rounds fail: execution halts, user must decide how to proceed.
+     - Review granularity adapts: <= 8 changed files = phase-level review; > 8 files = per-task review during Step 3.
+  6. Advance `current_phase` to the next pending phase.
+  7. Compress context before starting next phase.
 - When all phases are completed, advance stage to `verifying`.
 
 **Bug Reports**: If the user reports a bug during execution (describes unexpected behavior, test failures, or incorrect output), **stop current execution** and invoke `harness-task:bugfix`. The bugfix skill dispatches a zero-trust `bug-investigator` agent that independently audits all artifacts, discusses findings with the user, then patches proposal/phase files and resets `status.json`. After bugfix completes, resume executing from the reset phase.
