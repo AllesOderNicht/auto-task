@@ -1,10 +1,7 @@
 #!/bin/bash
 # install-dev-agent.sh — 一键安装 Dev Agent 到 ~/.claude-internal
 #
-# 用法（任选一种）:
-#   git clone https://git.woa.com/dragonyao/auto-agent.git /tmp/auto-agent && bash /tmp/auto-agent/install-dev-agent.sh
-#   curl -sL https://git.woa.com/dragonyao/auto-agent/raw/master/install-dev-agent.sh | bash
-#
+
 set -e
 
 CLAUDE_DIR="$HOME/.claude-internal"

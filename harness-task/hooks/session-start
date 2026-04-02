@@ -1,0 +1,246 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# SessionStart hook for harness-task plugin
+# Injects dev-change context with sliding-window compression at session start.
+
+###############################################################################
+# 1. Determine plugin root from script location
+###############################################################################
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+###############################################################################
+# 2. JSON escape helper (bash parameter substitution — fast, no subshells)
+###############################################################################
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+###############################################################################
+# 3. Read the using-harness-task SKILL.md
+###############################################################################
+skill_content=""
+skill_file="${PLUGIN_ROOT}/skills/using-harness-task/SKILL.md"
+if [ -f "$skill_file" ]; then
+    skill_content=$(cat "$skill_file" 2>/dev/null || echo "Error reading using-harness-task skill")
+else
+    skill_content="(using-harness-task SKILL.md not found at ${skill_file})"
+fi
+
+###############################################################################
+# 4. Read optional harness-task project context if present
+###############################################################################
+project_context_section=""
+project_dir="${CLAUDE_PROJECT_DIR:-}"
+
+if [ -n "$project_dir" ]; then
+    context_md="${project_dir}/.harness-task/context.md"
+    config_yaml="${project_dir}/.harness-task/config.yaml"
+
+    if [ -f "$context_md" ] || [ -f "$config_yaml" ]; then
+        project_context_section="\\n## Harness-Task Project Context\\n"
+        if [ -f "$context_md" ]; then
+            context_content=$(cat "$context_md" 2>/dev/null || echo "Error reading context.md")
+            project_context_section="${project_context_section}\\n### context.md\\n${context_content}\\n"
+        fi
+        if [ -f "$config_yaml" ]; then
+            config_content=$(cat "$config_yaml" 2>/dev/null || echo "Error reading config.yaml")
+            project_context_section="${project_context_section}\\n### config.yaml\\n${config_content}\\n"
+        fi
+    fi
+fi
+
+###############################################################################
+# 5. Read stage hooks from .harness-task/config.yaml if present
+###############################################################################
+stage_hooks_section=""
+
+if [ -n "$project_dir" ]; then
+    config_yaml_path="${project_dir}/.harness-task/config.yaml"
+    if [ -f "$config_yaml_path" ]; then
+        # Extract stage_hooks block using yq or grep fallback
+        if command -v yq &>/dev/null; then
+            hooks_yaml=$(yq '.stage_hooks // empty' "$config_yaml_path" 2>/dev/null || true)
+        else
+            hooks_yaml=$(sed -n '/^stage_hooks:/,/^[^ ]/p' "$config_yaml_path" 2>/dev/null | head -n -1 || true)
+        fi
+        if [ -n "$hooks_yaml" ] && [ "$hooks_yaml" != "null" ] && [ "$hooks_yaml" != "{}" ]; then
+            stage_hooks_section="\\n## Configured Stage Hooks\\n\`\`\`\\n${hooks_yaml}\\n\`\`\`\\n"
+        fi
+    fi
+fi
+
+###############################################################################
+# 6. Scan .dev-changes/*/status.json for active changes (stage != "done")
+#    Apply sliding window strategy:
+#      - Done milestones → compressed one-line summaries
+#      - Current milestone → full detail-plan content
+#      - Future milestones → title + todo count only
+###############################################################################
+changes_section=""
+
+if [ -n "$project_dir" ]; then
+    dev_changes_dir="${project_dir}/.dev-changes"
+
+    if [ -d "$dev_changes_dir" ]; then
+        found_active=0
+
+        for status_file in "$dev_changes_dir"/*/status.json; do
+            [ -f "$status_file" ] || continue
+
+            stage=$(jq -r '.stage // empty' "$status_file" 2>/dev/null || true)
+
+            # Skip completed changes
+            case "$stage" in
+                done) continue ;;
+                "") continue ;;
+            esac
+
+            change_dir="$(dirname "$status_file")"
+            change_dir_name="$(basename "$change_dir")"
+            change_name=$(jq -r '.change // empty' "$status_file" 2>/dev/null || true)
+            current_ms=$(jq -r '.current_milestone // empty' "$status_file" 2>/dev/null || true)
+            total_ms=$(jq -r '.total_milestones // 0' "$status_file" 2>/dev/null || true)
+            worktree=$(jq -r '.worktree_path // empty' "$status_file" 2>/dev/null || true)
+            branch=$(jq -r '.branch // empty' "$status_file" 2>/dev/null || true)
+            use_worktree=$(jq -r '.use_worktree // false' "$status_file" 2>/dev/null || true)
+            prompt_ready=$(jq -r '.prompt_ready // false' "$status_file" 2>/dev/null || true)
+            block_reason=$(jq -r '.block_reason // empty' "$status_file" 2>/dev/null || true)
+
+            if [ "$found_active" -eq 0 ]; then
+                changes_section="\\n## Active Dev Changes\\n"
+                found_active=1
+            fi
+
+            if [ -z "$change_name" ] || [ "$change_name" = "null" ]; then
+                change_name="$change_dir_name"
+            fi
+
+            changes_section="${changes_section}\\n### Change: ${change_name}\\n"
+            changes_section="${changes_section}Directory: ${change_dir_name}\\n"
+            changes_section="${changes_section}Stage: ${stage}\\n"
+            changes_section="${changes_section}Prompt Ready: ${prompt_ready}\\n"
+            changes_section="${changes_section}Milestone Progress: ${current_ms} / ${total_ms}\\n"
+
+            if [ "$use_worktree" = "true" ] && [ -n "$worktree" ] && [ "$worktree" != "null" ]; then
+                changes_section="${changes_section}Mode: Worktree Isolation\\n"
+                changes_section="${changes_section}Worktree: ${worktree}\\n"
+                [ -n "$branch" ] && [ "$branch" != "null" ] && changes_section="${changes_section}Branch: ${branch}\\n"
+            elif [ -n "$branch" ] && [ "$branch" != "null" ]; then
+                changes_section="${changes_section}Mode: Branch\\n"
+                changes_section="${changes_section}Branch: ${branch}\\n"
+            fi
+
+            if [ -n "$block_reason" ] && [ "$block_reason" != "null" ]; then
+                changes_section="${changes_section}Blocked: ${block_reason}\\n"
+            fi
+
+            # Contract
+            contract_file="${change_dir}/contract.md"
+            if [ -f "$contract_file" ]; then
+                contract_content=$(cat "$contract_file" 2>/dev/null || true)
+                changes_section="${changes_section}\\n#### Contract\\n${contract_content}\\n"
+            fi
+
+            # Sliding window over milestones
+            ms_count=$(jq '.milestones | length' "$status_file" 2>/dev/null || echo "0")
+            exec_log="${change_dir}/execution-log.md"
+
+            if [ "$ms_count" -gt 0 ]; then
+                changes_section="${changes_section}\\n#### Execution Status (Sliding Window)\\n"
+
+                for i in $(seq 0 $((ms_count - 1))); do
+                    ms_id=$(jq -r ".milestones[$i].id" "$status_file" 2>/dev/null || true)
+                    ms_title=$(jq -r ".milestones[$i].title" "$status_file" 2>/dev/null || true)
+                    ms_status=$(jq -r ".milestones[$i].status" "$status_file" 2>/dev/null || true)
+                    ms_total_todos=$(jq -r ".milestones[$i].total_todos // 0" "$status_file" 2>/dev/null || true)
+                    ms_completed_count=$(jq ".milestones[$i].completed_todos | length" "$status_file" 2>/dev/null || echo "0")
+
+                    if [ "$ms_status" = "done" ]; then
+                        # Done milestones → compressed one-line summaries
+                        changes_section="${changes_section}\\n**Milestone ${ms_id}: ${ms_title}** [DONE]\\n"
+                        if [ -f "$exec_log" ]; then
+                            summary_lines=$(grep -E "^## Milestone ${ms_id} - Todo [0-9]+:" "$exec_log" 2>/dev/null | sed 's/^## /  - /' || true)
+                            if [ -n "$summary_lines" ]; then
+                                changes_section="${changes_section}${summary_lines}\\n"
+                            else
+                                changes_section="${changes_section}  Completed ${ms_completed_count}/${ms_total_todos} todos\\n"
+                            fi
+                        else
+                            changes_section="${changes_section}  Completed ${ms_completed_count}/${ms_total_todos} todos\\n"
+                        fi
+
+                    elif [ "$ms_id" = "$current_ms" ]; then
+                        # Current milestone → full detail-plan content
+                        changes_section="${changes_section}\\n**Milestone ${ms_id}: ${ms_title}** [CURRENT — ${ms_completed_count}/${ms_total_todos}]\\n"
+                        detail_file="${change_dir}/milestones/${ms_id}/detail-plan.md"
+                        if [ -f "$detail_file" ]; then
+                            detail_content=$(cat "$detail_file" 2>/dev/null || true)
+                            changes_section="${changes_section}\\n${detail_content}\\n"
+                        fi
+                        # Show completed todo summaries for current milestone
+                        if [ "$ms_completed_count" -gt 0 ] && [ -f "$exec_log" ]; then
+                            completed_lines=$(grep -E "^## Milestone ${ms_id} - Todo [0-9]+:" "$exec_log" 2>/dev/null || true)
+                            if [ -n "$completed_lines" ]; then
+                                changes_section="${changes_section}\\nCompleted todos:\\n"
+                                changes_section="${changes_section}$(echo "$completed_lines" | sed 's/^## /  - /')\\n"
+                            fi
+                        fi
+
+                    else
+                        # Future milestones → title + todo count only
+                        if [ "$ms_total_todos" -gt 0 ]; then
+                            changes_section="${changes_section}\\n**Milestone ${ms_id}: ${ms_title}** [PENDING — ${ms_total_todos} todos]\\n"
+                        else
+                            changes_section="${changes_section}\\n**Milestone ${ms_id}: ${ms_title}** [PENDING — not yet planned]\\n"
+                        fi
+                    fi
+                done
+            else
+                # No milestones yet — show outline if available
+                outline_file="${change_dir}/outline.md"
+                if [ -f "$outline_file" ]; then
+                    outline_content=$(cat "$outline_file" 2>/dev/null || true)
+                    changes_section="${changes_section}\\n#### Outline\\n${outline_content}\\n"
+                fi
+            fi
+        done
+    fi
+fi
+
+###############################################################################
+# 7. Build the session context string
+###############################################################################
+skill_escaped=$(escape_for_json "$skill_content")
+project_context_escaped=$(escape_for_json "$project_context_section")
+stage_hooks_escaped=$(escape_for_json "$stage_hooks_section")
+changes_escaped=$(escape_for_json "$changes_section")
+
+session_context="<EXTREMELY_IMPORTANT>\\nYou have the harness-task development workflow plugin installed.\\n\\n**Below is the full content of your 'harness-task:using-harness-task' skill — your introduction to using harness-task. For all other skills, use the 'Skill' tool:**\\n\\n${skill_escaped}\\n${project_context_escaped}\\n${stage_hooks_escaped}\\n${changes_escaped}\\n</EXTREMELY_IMPORTANT>"
+
+###############################################################################
+# 8. Output JSON with platform detection
+###############################################################################
+# Cursor hooks expect additional_context (snake_case).
+# Claude Code hooks expect hookSpecificOutput.additionalContext (nested).
+# Copilot CLI and others expect additionalContext (top-level, SDK standard).
+# Uses printf instead of heredoc to work around bash 5.3+ heredoc hang.
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+    # Cursor sets CURSOR_PLUGIN_ROOT (may also set CLAUDE_PLUGIN_ROOT)
+    printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+    # Claude Code sets CLAUDE_PLUGIN_ROOT without COPILOT_CLI
+    printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+    # Copilot CLI (sets COPILOT_CLI=1) or unknown platform — SDK standard format
+    printf '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

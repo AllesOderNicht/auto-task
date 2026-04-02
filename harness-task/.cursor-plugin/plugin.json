@@ -1,0 +1,23 @@
+{
+  "name": "harness-task",
+  "displayName": "Harness Task",
+  "description": "Structured development workflow plugin: prompt → brainstorming → proposal + delta specs + phase plans → TDD execution → verify → archive with spec merge",
+  "version": "1.0.0",
+  "author": {
+    "name": "harness-task"
+  },
+  "license": "MIT",
+  "keywords": [
+    "dev-workflow",
+    "tdd",
+    "spec-driven",
+    "milestone-tracking",
+    "delta-specs",
+    "brainstorming",
+    "planning"
+  ],
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "commands": "./commands/",
+  "hooks": "./hooks/hooks-cursor.json"
+}

@@ -1,0 +1,37 @@
+{
+  "change": "main",
+  "change_dir": "main",
+  "stage": "verifying",
+  "branch": "main",
+  "use_worktree": false,
+  "worktree_path": null,
+  "prompt_ready": true,
+  "current_milestone": null,
+  "total_milestones": 2,
+  "milestones": [
+    {
+      "id": "PH-1",
+      "title": "Core workflow consolidation",
+      "status": "done",
+      "total_todos": 3,
+      "completed_todos": [
+        "Add failing tests for four-stage workflow",
+        "Update status utilities to start from outlining",
+        "Rewrite primary dev skill to merged outlining flow"
+      ]
+    },
+    {
+      "id": "PH-2",
+      "title": "Documentation and skill alignment",
+      "status": "done",
+      "total_todos": 3,
+      "completed_todos": [
+        "Align README and README.zh-CN with merged outlining",
+        "Remove stale outline references from supporting skills",
+        "Validate no remaining user-facing proposing references"
+      ]
+    }
+  ],
+  "created_at": "2026-04-02T00:00:00.000Z",
+  "updated_at": "2026-04-02T15:55:00.000Z"
+}
