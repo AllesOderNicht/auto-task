@@ -41,19 +41,4 @@ export function toPhaseProgress(parsed) {
         status: 'pending',
     }));
 }
-export function formatPhaseSummary(phaseId, phaseTitle, fileChanges) {
-    const lines = [
-        `# ${phaseId}: ${phaseTitle}`,
-        '',
-        '## Files Changed',
-        '',
-        '| File | Change |',
-        '|------|--------|',
-    ];
-    for (const change of fileChanges) {
-        lines.push(`| ${change.file} | ${change.description} |`);
-    }
-    lines.push('');
-    return lines.join('\n');
-}
 //# sourceMappingURL=phase.js.map

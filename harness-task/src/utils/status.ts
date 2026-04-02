@@ -21,7 +21,7 @@ export interface PhaseProgress {
   id: string;
   title: string;
   status: PhaseStatus;
-  summary_file?: string;
+  summary?: string;
 }
 
 export interface ChangeStatus {
@@ -75,10 +75,10 @@ export function setPhases(status: ChangeStatus, phases: PhaseProgress[]): Change
   };
 }
 
-export function advancePhase(status: ChangeStatus, completedPhaseId: string, summaryFile: string): ChangeStatus {
+export function advancePhase(status: ChangeStatus, completedPhaseId: string, summary: string): ChangeStatus {
   const phases = status.phases.map(p => {
     if (p.id === completedPhaseId) {
-      return { ...p, status: 'completed' as PhaseStatus, summary_file: summaryFile };
+      return { ...p, status: 'completed' as PhaseStatus, summary };
     }
     return p;
   });
@@ -106,6 +106,34 @@ export function startPhase(status: ChangeStatus, phaseId: string): ChangeStatus 
 
   return {
     ...status,
+    phases,
+    current_phase: phaseId,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Reset progress back to a specific phase for bugfix re-execution.
+ * The target phase becomes `in_progress` with its summary cleared.
+ * All subsequent phases become `pending` with summaries cleared.
+ * Earlier phases remain `completed` and untouched.
+ */
+export function resetToPhase(status: ChangeStatus, phaseId: string): ChangeStatus {
+  let found = false;
+  const phases = status.phases.map(p => {
+    if (p.id === phaseId) {
+      found = true;
+      return { ...p, status: 'in_progress' as PhaseStatus, summary: undefined };
+    }
+    if (found) {
+      return { ...p, status: 'pending' as PhaseStatus, summary: undefined };
+    }
+    return p;
+  });
+
+  return {
+    ...status,
+    stage: 'executing',
     phases,
     current_phase: phaseId,
     updated_at: new Date().toISOString(),

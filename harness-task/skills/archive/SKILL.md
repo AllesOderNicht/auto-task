@@ -42,12 +42,9 @@ Archive a development change that has reached the `verifying` stage with all pha
   archive/
     2026-04-02-feature-auth/
       prompt.md
-      refined-prompt.md
       proposal.md
-      design.md
-      tasks.md
       status.json
       phases/
-        PH-1-summary.md
-        PH-2-summary.md
+        PH-1.md
+        PH-2.md
 ```

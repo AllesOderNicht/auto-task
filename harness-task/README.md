@@ -12,8 +12,8 @@ init → prompting → refining → proposing → executing → verifying
 |-------|------------|
 | **init** | Create branch + directory + empty prompt.md |
 | **prompting** | User fills in prompt.md with requirements |
-| **refining** | Round 1 brainstorming: read code, ask >=5 questions, generate refined-prompt.md (no subagent) |
-| **proposing** | Round 2 brainstorming: subagent explores code, generate proposal.md + design.md + tasks.md |
+| **refining** | Round 1 brainstorming: read code, ask >=5 questions, update prompt.md with refined requirements (no subagent) |
+| **proposing** | Round 2 brainstorming: subagent explores code, generate proposal.md + per-phase plan files |
 | **executing** | Execute phases with TDD, generate summaries, compress context between phases |
 | **verifying** | Final TDD verification + handoff |
 
@@ -41,20 +41,17 @@ init → prompting → refining → proposing → executing → verifying
 
 ```
 .dev-changes/{branch-name}/
-  prompt.md              # Original user requirements
-  refined-prompt.md      # After round 1 brainstorming
-  proposal.md            # What and why (proposal)
-  design.md              # How (technical design)
-  tasks.md               # Phased task list
-  status.json            # Stage + phase progress
+  prompt.md              # User requirements (updated with refined content after round 1)
+  proposal.md            # What, why, and how
+  status.json            # Stage + phase progress + phase summaries
   phases/
-    PH-1-summary.md      # Phase 1 completion summary
-    PH-2-summary.md      # Phase 2 completion summary
+    PH-1.md              # Phase 1 plan (tasks)
+    PH-2.md              # Phase 2 plan (tasks)
 ```
 
 ## Key Features
 
-- **Two-round brainstorming**: Round 1 asks structured questions to understand the problem. Round 2 uses subagent to explore code and generate a concrete proposal.
+- **Two-round brainstorming**: Round 1 asks structured questions to understand the problem. Round 2 uses subagent to explore code and generate a concrete proposal with per-phase plans.
 - **Phased execution**: Tasks are split into independent phases. Each phase executes with TDD and produces a minimal summary.
 - **Context compression**: Between phases, only the proposal and completed phase summaries are carried forward. No context window bloat.
 - **Breakpoint resume**: Any interruption can be resumed. Status is persisted to `status.json` after every stage/phase change.

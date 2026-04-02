@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   getChangeDirName,
   getArtifactPath,
-  getPhaseSummaryPath,
+  getPhasePlanPath,
   createPromptTemplate,
-  createPhaseSummaryTemplate,
+  createPhasePlanTemplate,
 } from '../src/utils/change.js';
 
 describe('getChangeDirName', () => {
@@ -34,19 +34,16 @@ describe('getArtifactPath', () => {
   it('returns correct path for each artifact type', () => {
     const dir = '/project/.dev-changes/my-branch';
     expect(getArtifactPath(dir, 'prompt')).toBe(`${dir}/prompt.md`);
-    expect(getArtifactPath(dir, 'refined-prompt')).toBe(`${dir}/refined-prompt.md`);
     expect(getArtifactPath(dir, 'proposal')).toBe(`${dir}/proposal.md`);
-    expect(getArtifactPath(dir, 'design')).toBe(`${dir}/design.md`);
-    expect(getArtifactPath(dir, 'tasks')).toBe(`${dir}/tasks.md`);
     expect(getArtifactPath(dir, 'status')).toBe(`${dir}/status.json`);
   });
 });
 
-describe('getPhaseSummaryPath', () => {
+describe('getPhasePlanPath', () => {
   it('returns path under phases/ directory', () => {
     const dir = '/project/.dev-changes/my-branch';
-    expect(getPhaseSummaryPath(dir, 'PH-1')).toBe(`${dir}/phases/PH-1-summary.md`);
-    expect(getPhaseSummaryPath(dir, 'PH-3')).toBe(`${dir}/phases/PH-3-summary.md`);
+    expect(getPhasePlanPath(dir, 'PH-1')).toBe(`${dir}/phases/PH-1.md`);
+    expect(getPhasePlanPath(dir, 'PH-3')).toBe(`${dir}/phases/PH-3.md`);
   });
 });
 
@@ -59,11 +56,10 @@ describe('createPromptTemplate', () => {
   });
 });
 
-describe('createPhaseSummaryTemplate', () => {
-  it('generates a summary template with phase title', () => {
-    const template = createPhaseSummaryTemplate('PH-1', 'Setup project structure');
+describe('createPhasePlanTemplate', () => {
+  it('generates a plan template with phase title', () => {
+    const template = createPhasePlanTemplate('PH-1', 'Setup project structure');
     expect(template).toContain('# PH-1: Setup project structure');
-    expect(template).toContain('## Files Changed');
-    expect(template).toContain('| File | Change |');
+    expect(template).toContain('## Tasks');
   });
 });

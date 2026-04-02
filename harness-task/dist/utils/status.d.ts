@@ -5,7 +5,7 @@ export interface PhaseProgress {
     id: string;
     title: string;
     status: PhaseStatus;
-    summary_file?: string;
+    summary?: string;
 }
 export interface ChangeStatus {
     branch: string;
@@ -21,6 +21,13 @@ export declare function updateStage(status: ChangeStatus, newStage: Stage): Chan
 export declare function getNextStage(current: Stage): Stage | null;
 export declare function isComplete(status: ChangeStatus): boolean;
 export declare function setPhases(status: ChangeStatus, phases: PhaseProgress[]): ChangeStatus;
-export declare function advancePhase(status: ChangeStatus, completedPhaseId: string, summaryFile: string): ChangeStatus;
+export declare function advancePhase(status: ChangeStatus, completedPhaseId: string, summary: string): ChangeStatus;
 export declare function startPhase(status: ChangeStatus, phaseId: string): ChangeStatus;
+/**
+ * Reset progress back to a specific phase for bugfix re-execution.
+ * The target phase becomes `in_progress` with its summary cleared.
+ * All subsequent phases become `pending` with summaries cleared.
+ * Earlier phases remain `completed` and untouched.
+ */
+export declare function resetToPhase(status: ChangeStatus, phaseId: string): ChangeStatus;
 //# sourceMappingURL=status.d.ts.map

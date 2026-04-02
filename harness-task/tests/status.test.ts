@@ -9,6 +9,7 @@ import {
   setPhases,
   advancePhase,
   startPhase,
+  resetToPhase,
 } from '../src/utils/status.js';
 
 describe('STAGE_ORDER', () => {
@@ -77,8 +78,8 @@ describe('isComplete', () => {
     let status = createInitialStatus('b', 'd');
     status = updateStage(status, 'verifying');
     status = setPhases(status, [
-      { id: 'PH-1', title: 'Setup', status: 'completed', summary_file: 'phases/PH-1-summary.md' },
-      { id: 'PH-2', title: 'Core', status: 'completed', summary_file: 'phases/PH-2-summary.md' },
+      { id: 'PH-1', title: 'Setup', status: 'completed', summary: 'src/index.ts: added entry point' },
+      { id: 'PH-2', title: 'Core', status: 'completed', summary: 'src/core.ts: added core logic' },
     ]);
     expect(isComplete(status)).toBe(true);
   });
@@ -112,9 +113,9 @@ describe('advancePhase', () => {
       { id: 'PH-3', title: 'C', status: 'pending' },
     ]);
 
-    const updated = advancePhase(status, 'PH-1', 'phases/PH-1-summary.md');
+    const updated = advancePhase(status, 'PH-1', 'src/index.ts: added entry point');
     expect(updated.phases[0].status).toBe('completed');
-    expect(updated.phases[0].summary_file).toBe('phases/PH-1-summary.md');
+    expect(updated.phases[0].summary).toBe('src/index.ts: added entry point');
     expect(updated.phases[1].status).toBe('in_progress');
     expect(updated.current_phase).toBe('PH-2');
   });
@@ -125,7 +126,7 @@ describe('advancePhase', () => {
       { id: 'PH-1', title: 'A', status: 'in_progress' },
     ]);
 
-    const updated = advancePhase(status, 'PH-1', 'phases/PH-1-summary.md');
+    const updated = advancePhase(status, 'PH-1', 'src/setup.ts: initial setup');
     expect(updated.phases[0].status).toBe('completed');
     expect(updated.current_phase).toBeNull();
   });
@@ -142,5 +143,80 @@ describe('startPhase', () => {
     const updated = startPhase(status, 'PH-1');
     expect(updated.phases[0].status).toBe('in_progress');
     expect(updated.current_phase).toBe('PH-1');
+  });
+});
+
+describe('resetToPhase', () => {
+  it('resets from a middle phase, keeping earlier phases completed', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'verifying');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'Setup', status: 'completed', summary: 'src/setup.ts: init' },
+      { id: 'PH-2', title: 'Core', status: 'completed', summary: 'src/core.ts: logic' },
+      { id: 'PH-3', title: 'API', status: 'completed', summary: 'src/api.ts: endpoints' },
+      { id: 'PH-4', title: 'Polish', status: 'completed', summary: 'src/ui.ts: styles' },
+    ]);
+
+    const updated = resetToPhase(status, 'PH-2');
+
+    expect(updated.stage).toBe('executing');
+    expect(updated.current_phase).toBe('PH-2');
+    expect(updated.phases[0].status).toBe('completed');
+    expect(updated.phases[0].summary).toBe('src/setup.ts: init');
+    expect(updated.phases[1].status).toBe('in_progress');
+    expect(updated.phases[1].summary).toBeUndefined();
+    expect(updated.phases[2].status).toBe('pending');
+    expect(updated.phases[2].summary).toBeUndefined();
+    expect(updated.phases[3].status).toBe('pending');
+    expect(updated.phases[3].summary).toBeUndefined();
+  });
+
+  it('resets to the first phase', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'executing');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'completed', summary: 'done' },
+      { id: 'PH-2', title: 'B', status: 'completed', summary: 'done' },
+    ]);
+
+    const updated = resetToPhase(status, 'PH-1');
+
+    expect(updated.current_phase).toBe('PH-1');
+    expect(updated.phases[0].status).toBe('in_progress');
+    expect(updated.phases[0].summary).toBeUndefined();
+    expect(updated.phases[1].status).toBe('pending');
+    expect(updated.phases[1].summary).toBeUndefined();
+  });
+
+  it('resets to the last phase', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'verifying');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'completed', summary: 's1' },
+      { id: 'PH-2', title: 'B', status: 'completed', summary: 's2' },
+      { id: 'PH-3', title: 'C', status: 'completed', summary: 's3' },
+    ]);
+
+    const updated = resetToPhase(status, 'PH-3');
+
+    expect(updated.stage).toBe('executing');
+    expect(updated.current_phase).toBe('PH-3');
+    expect(updated.phases[0].status).toBe('completed');
+    expect(updated.phases[0].summary).toBe('s1');
+    expect(updated.phases[1].status).toBe('completed');
+    expect(updated.phases[1].summary).toBe('s2');
+    expect(updated.phases[2].status).toBe('in_progress');
+    expect(updated.phases[2].summary).toBeUndefined();
+  });
+
+  it('forces stage back to executing even from verifying', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'verifying');
+    status = setPhases(status, [
+      { id: 'PH-1', title: 'A', status: 'completed', summary: 's1' },
+    ]);
+
+    const updated = resetToPhase(status, 'PH-1');
+    expect(updated.stage).toBe('executing');
   });
 });

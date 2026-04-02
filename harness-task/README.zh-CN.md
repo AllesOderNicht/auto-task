@@ -12,8 +12,8 @@ init → prompting → refining → proposing → executing → verifying
 |------|------|
 | **init** | 创建分支 + 目录 + 空的 prompt.md |
 | **prompting** | 用户填写 prompt.md，描述需求 |
-| **refining** | 第一轮头脑风暴：阅读代码，提出至少5个问题，生成 refined-prompt.md（不使用子代理） |
-| **proposing** | 第二轮头脑风暴：子代理并行探索代码库，生成 proposal.md + design.md + tasks.md |
+| **refining** | 第一轮头脑风暴：阅读代码，提出至少5个问题，更新 prompt.md 为精炼需求（不使用子代理） |
+| **proposing** | 第二轮头脑风暴：子代理并行探索代码库，生成 proposal.md + 分阶段计划文件 |
 | **executing** | 按 phase 执行，每个 phase 内 TDD，完成后生成摘要，压缩上下文 |
 | **verifying** | 最终 TDD 验证 + 交接 |
 
@@ -41,20 +41,17 @@ init → prompting → refining → proposing → executing → verifying
 
 ```
 .dev-changes/{分支名}/
-  prompt.md              # 原始用户需求
-  refined-prompt.md      # 第一轮头脑风暴后的精炼需求
-  proposal.md            # 提案（做什么、为什么）
-  design.md              # 技术设计（怎么做）
-  tasks.md               # 分阶段任务清单
-  status.json            # 阶段状态 + phase 进度
+  prompt.md              # 用户需求（第一轮头脑风暴后更新为精炼版本）
+  proposal.md            # 提案（做什么、为什么、怎么做）
+  status.json            # 阶段状态 + phase 进度 + 完成摘要
   phases/
-    PH-1-summary.md      # Phase 1 完成摘要
-    PH-2-summary.md      # Phase 2 完成摘要
+    PH-1.md              # Phase 1 计划（任务清单）
+    PH-2.md              # Phase 2 计划（任务清单）
 ```
 
 ## 核心特性
 
-- **两轮头脑风暴**：第一轮通过结构化问题深入理解需求。第二轮使用子代理并行探索代码库，生成具体的提案。
+- **两轮头脑风暴**：第一轮通过结构化问题深入理解需求。第二轮使用子代理并行探索代码库，生成提案和分阶段计划。
 - **分阶段执行**：任务被拆分为独立的 phase。每个 phase 使用 TDD 执行，完成后生成最小化摘要。
 - **上下文压缩**：phase 之间只携带提案和已完成 phase 的摘要。避免上下文窗口膨胀。
 - **断点续跑**：任何中断都可以恢复。每次阶段/phase 变更后状态会立即持久化到 `status.json`。

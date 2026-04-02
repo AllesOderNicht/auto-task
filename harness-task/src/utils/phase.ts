@@ -54,29 +54,6 @@ export function toPhaseProgress(parsed: ParsedPhase[]): PhaseProgress[] {
 
 export interface PhaseContext {
   proposal: string | null;
-  design: string | null;
   currentPhase: ParsedPhase | null;
-  completedSummaries: { phaseId: string; content: string }[];
-}
-
-export function formatPhaseSummary(
-  phaseId: string,
-  phaseTitle: string,
-  fileChanges: { file: string; description: string }[],
-): string {
-  const lines = [
-    `# ${phaseId}: ${phaseTitle}`,
-    '',
-    '## Files Changed',
-    '',
-    '| File | Change |',
-    '|------|--------|',
-  ];
-
-  for (const change of fileChanges) {
-    lines.push(`| ${change.file} | ${change.description} |`);
-  }
-
-  lines.push('');
-  return lines.join('\n');
+  completedSummaries: { phaseId: string; summary: string }[];
 }

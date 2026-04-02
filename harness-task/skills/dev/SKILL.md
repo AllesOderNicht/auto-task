@@ -12,12 +12,13 @@ You are the main entry point for the harness-task development workflow. Your job
 
 Before anything else, execute these steps:
 
-1. **Resolve the branch**: If a branch name argument was provided, use it. Otherwise use the current git branch.
-2. **Switch/create branch**: If the repo is not on the target branch, switch to it or create it from the base branch.
-3. **Ensure change directory**: Create `.dev-changes/{safe-branch-dir}/` if it doesn't exist.
-4. **Ensure prompt.md**: Create `.dev-changes/{safe-branch-dir}/prompt.md` from template if it doesn't exist.
-5. **Ensure status.json**: Create `.dev-changes/{safe-branch-dir}/status.json` with initial `init` stage if it doesn't exist.
-6. **Read status.json**: Load current stage and phase progress.
+1. **Resolve the project root**: Use the current workspace/project root directory (NOT `~/Developer` or any home sub-directory). All `.dev-changes/` paths below are relative to this project root.
+2. **Resolve the branch**: If a branch name argument was provided, use it. Otherwise use the current git branch.
+3. **Switch/create branch**: If the repo is not on the target branch, switch to it or create it from the base branch.
+4. **Ensure change directory**: Create `<project-root>/.dev-changes/{safe-branch-dir}/` if it doesn't exist.
+5. **Ensure prompt.md**: Create `<project-root>/.dev-changes/{safe-branch-dir}/prompt.md` from template if it doesn't exist.
+6. **Ensure status.json**: Create `<project-root>/.dev-changes/{safe-branch-dir}/status.json` with initial `init` stage if it doesn't exist.
+7. **Read status.json**: Load current stage and phase progress.
 
 Only after completing the startup hook should you proceed.
 
@@ -43,16 +44,17 @@ init → prompting → refining → proposing → executing → verifying
 
 - **Invoke skill `harness-task:brainstorming` — Round 1**.
 - Read code, ask at least 5 structured questions (NO subagent).
-- Generate `refined-prompt.md` based on user answers.
+- Update `prompt.md` with refined requirements based on user answers.
 - Advance stage to `proposing`.
+- **After advancing, immediately continue to the `proposing` stage below** — do NOT stop or wait for user input between rounds.
 
 ### Stage: `proposing`
 
 - **Invoke skill `harness-task:brainstorming` — Round 2**.
-- Compress previous context (summarize round 1 into a short block, then work from `refined-prompt.md` only).
+- Compress previous context (summarize round 1 into a short block, then work from the updated `prompt.md` only).
 - Use subagent to explore the codebase in parallel.
-- Generate three files: `proposal.md`, `design.md`, `tasks.md`.
-- Parse phases from `tasks.md` and populate `status.json` with phase list.
+- Generate `proposal.md` and per-phase plan files (`phases/PH-{n}.md`).
+- Populate `status.json` with phase list.
 - **Wait for user confirmation** before advancing.
 - Advance stage to `executing`.
 
@@ -60,17 +62,19 @@ init → prompting → refining → proposing → executing → verifying
 
 - **Invoke skill `harness-task:executing`** for the current phase.
 - For each phase:
-  1. Load context: `proposal.md` + completed phase summaries.
-  2. Execute tasks with TDD (invoke `harness-task:tdd`).
-  3. Generate `phases/PH-{n}-summary.md` — minimal format: file changes + one-line per file.
-  4. Update `status.json`: mark phase completed, advance to next.
+  1. Load context: `proposal.md` + completed phase summaries from `status.json`.
+  2. Read the current phase's plan from `phases/PH-{n}.md`.
+  3. Execute tasks with TDD (invoke `harness-task:tdd`).
+  4. Update `status.json`: mark phase completed, write summary string, advance to next.
   5. Compress context before starting next phase.
 - When all phases are completed, advance stage to `verifying`.
+
+**Bug Reports**: If the user reports a bug during execution (describes unexpected behavior, test failures, or incorrect output), **stop current execution** and invoke `harness-task:bugfix`. The bugfix skill dispatches a zero-trust `bug-investigator` agent that independently audits all artifacts, discusses findings with the user, then patches proposal/phase files and resets `status.json`. After bugfix completes, resume executing from the reset phase.
 
 ### Stage: `verifying`
 
 - Run full test suite.
-- Review all phase summaries against the original proposal.
+- Review phase summaries in `status.json` against the original proposal.
 - Generate a final verification report.
 - The change is now complete.
 
@@ -82,9 +86,9 @@ When `/alles-dev` is invoked and `status.json` already exists:
 |---------------|--------|
 | `init` | Advance to `prompting` |
 | `prompting` | Check prompt.md, advance if filled |
-| `refining` | Resume round 1 brainstorming |
-| `proposing` | Resume round 2 brainstorming, or re-generate if files missing |
-| `executing` | Find current phase from `status.json`, resume execution |
+| `refining` | Resume round 1 brainstorming, then immediately continue to round 2 |
+| `proposing` | Resume round 2 brainstorming (read updated prompt.md), or re-generate if files missing |
+| `executing` | Find current phase from `status.json`, resume execution. If phases were reset by a bugfix (earlier phases completed but later ones pending), this is a post-bugfix resume — continue normally from `current_phase`. |
 | `verifying` | Re-run verification |
 
 ## Status File Format
@@ -98,7 +102,7 @@ When `/alles-dev` is invoked and `status.json` already exists:
   "updated_at": "2026-04-02T01:00:00.000Z",
   "current_phase": "PH-2",
   "phases": [
-    { "id": "PH-1", "title": "Setup", "status": "completed", "summary_file": "phases/PH-1-summary.md" },
+    { "id": "PH-1", "title": "Setup", "status": "completed", "summary": "src/index.ts: added entry point | tsconfig.json: configured compiler" },
     { "id": "PH-2", "title": "Core", "status": "in_progress" },
     { "id": "PH-3", "title": "Polish", "status": "pending" }
   ]
@@ -121,4 +125,4 @@ Examples:
 3. **Always persist stage changes** to `status.json` immediately.
 4. **Always wait for user confirmation** before advancing from `proposing` to `executing`.
 5. **TDD is mandatory** in every phase during `executing`.
-6. **Compress context** between phases — carry only proposal + completed phase summaries.
+6. **Compress context** between phases — carry only proposal + completed phase summaries from `status.json`.

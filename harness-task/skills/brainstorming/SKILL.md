@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: Two-round structured brainstorming. Round 1 (refining) — no subagent, ask questions, generate refined-prompt.md. Round 2 (proposing) — subagent explores code, generate proposal.md + design.md + tasks.md.
+description: Two-round structured brainstorming. Round 1 (refining) — no subagent, ask questions, update prompt.md with refined requirements. Round 2 (proposing) — subagent explores code, generate proposal.md + per-phase plan files.
 ---
 
 # Brainstorming — Two-Round Design Process
@@ -11,7 +11,7 @@ This skill drives two distinct brainstorming rounds. Each round has different to
 
 ## Round 1: Refining (stage = `refining`)
 
-**Goal**: Deeply understand the user's intent and generate a comprehensive `refined-prompt.md`.
+**Goal**: Deeply understand the user's intent and update `prompt.md` with refined, comprehensive requirements.
 
 **Constraints**: NO subagent. Work entirely in the current conversation context.
 
@@ -37,13 +37,12 @@ This skill drives two distinct brainstorming rounds. Each round has different to
    - "Should this be backward-compatible?"
    - "How should error cases be handled?"
 
-3. **Generate `refined-prompt.md`** — After receiving answers, create a comprehensive refined prompt:
+3. **Update `prompt.md`** — After receiving answers, rewrite `prompt.md` with the refined content:
 
    ```markdown
-   # Refined Prompt
+   # Prompt
 
    - Branch: `{branch-name}`
-   - Original Prompt: `prompt.md`
 
    ## Context
    <!-- Project context discovered during code reading -->
@@ -77,14 +76,17 @@ This skill drives two distinct brainstorming rounds. Each round has different to
 - [ ] Read prompt.md
 - [ ] Ask >= 5 structured questions in a single batch
 - [ ] Receive all answers
-- [ ] Generate refined-prompt.md
+- [ ] Update prompt.md with refined requirements
 - [ ] Update status.json to `proposing`
+- [ ] Immediately proceed to Round 2 (do NOT stop here)
+
+**IMPORTANT**: After completing Round 1 and setting stage to `proposing`, you MUST immediately continue with Round 2 below. Do NOT end the turn, wait for user input, or return control. The two rounds form a continuous brainstorming process.
 
 ---
 
 ## Round 2: Proposing (stage = `proposing`)
 
-**Goal**: Generate `proposal.md`, `design.md`, and `tasks.md` with concrete implementation plans.
+**Goal**: Generate `proposal.md` and per-phase plan files (`phases/PH-{n}.md`) with concrete implementation plans.
 
 **Constraints**: USE subagent to explore code. Compress round 1 context first.
 
@@ -92,21 +94,19 @@ This skill drives two distinct brainstorming rounds. Each round has different to
 
 Before starting round 2, compress the round 1 context:
 - Do NOT carry the full round 1 conversation history.
-- Read `refined-prompt.md` as the authoritative input.
+- Read `prompt.md` (which was updated with refined requirements in round 1) as the authoritative input.
 - Summarize any round 1 context into a short paragraph, then proceed with round 2 work.
 
 ### Steps
 
-1. **Read `refined-prompt.md`** — This is your single source of truth for requirements.
+1. **Read `prompt.md`** — This is your single source of truth for requirements (already refined in round 1).
 
 2. **Explore code with subagent** — Launch subagent(s) to explore the codebase:
    - Use `explore` type subagents to investigate different code areas in parallel.
    - Areas to explore: source code structure, existing patterns, test infrastructure, dependencies, config.
    - Each subagent should return: key files found, patterns observed, potential impact areas.
 
-3. **Synthesize and generate three files**:
-
-   **`proposal.md`** — What and Why:
+3. **Generate `proposal.md`** — What, Why, and How:
    ```markdown
    # Proposal: {title}
 
@@ -115,6 +115,9 @@ Before starting round 2, compress the round 1 context:
 
    ## Background
    <!-- Current state and why change is needed -->
+
+   ## Technical Approach
+   <!-- Architecture, key decisions, implementation strategy -->
 
    ## Changes Overview
    <!-- High-level summary of what will change -->
@@ -126,61 +129,33 @@ Before starting round 2, compress the round 1 context:
    <!-- What could go wrong and mitigation -->
    ```
 
-   **`design.md`** — How:
+4. **Generate per-phase plan files** — Create `phases/PH-{n}.md` for each phase:
    ```markdown
-   # Design: {title}
+   # PH-{n}: {Phase Title}
 
-   ## Architecture
-   <!-- Key architectural decisions -->
-
-   ## Technical Approach
-   <!-- Implementation strategy -->
-
-   ## Interface Changes
-   <!-- API/interface modifications -->
-
-   ## Data Flow
-   <!-- How data moves through the system -->
-
-   ## Dependencies
-   <!-- External dependencies, if any -->
+   ## Tasks
+   - [ ] {n}.1 {specific task with file paths}
+   - [ ] {n}.2 {another specific task}
    ```
 
-   **`tasks.md`** — Execution Plan:
-   ```markdown
-   # Tasks
-
-   ## Phase 1: {title}
-   - [ ] 1.1 {specific task with file paths}
-   - [ ] 1.2 {another specific task}
-
-   ## Phase 2: {title}
-   - [ ] 2.1 {specific task}
-   - [ ] 2.2 {another specific task}
-
-   ## Phase 3: {title}
-   - [ ] 3.1 {specific task}
-   ```
-
-   Task writing rules:
+   Phase/task writing rules:
    - Each phase should be completable independently.
    - Each task should reference specific files or modules.
    - Each task should be small enough to implement and test in one TDD cycle.
    - Order phases by dependency: foundational work first.
 
-4. **Update status.json** — Parse phases from `tasks.md`, populate the phases array, keep stage as `proposing`.
+5. **Update status.json** — Populate the phases array from the generated phase files, keep stage as `proposing`.
 
-5. **Wait for user confirmation** — Present the proposal summary and ask the user to confirm before proceeding. Only after confirmation, set stage to `executing`.
+6. **Wait for user confirmation** — Present the proposal summary and ask the user to confirm before proceeding. Only after confirmation, set stage to `executing`.
 
 ### Round 2 Checklist
 
 - [ ] Compress round 1 context
-- [ ] Read refined-prompt.md
+- [ ] Read prompt.md
 - [ ] Launch subagent(s) to explore codebase
 - [ ] Generate proposal.md
-- [ ] Generate design.md
-- [ ] Generate tasks.md with phased plan
-- [ ] Update status.json with parsed phases
+- [ ] Generate phases/PH-{n}.md plan files for each phase
+- [ ] Update status.json with phases array
 - [ ] Present summary to user
 - [ ] Receive user confirmation
 - [ ] Update status.json stage to `executing`

@@ -5,18 +5,12 @@ const EDGE_SEPARATOR_PATTERN = /^[_\-.]+|[_\-.]+$/g;
 
 export type Artifact =
   | 'prompt'
-  | 'refined-prompt'
   | 'proposal'
-  | 'design'
-  | 'tasks'
   | 'status';
 
 const ARTIFACT_FILES: Record<Artifact, string> = {
   'prompt': 'prompt.md',
-  'refined-prompt': 'refined-prompt.md',
   'proposal': 'proposal.md',
-  'design': 'design.md',
-  'tasks': 'tasks.md',
   'status': 'status.json',
 };
 
@@ -38,8 +32,8 @@ export function getArtifactPath(changeDir: string, artifact: Artifact): string {
   return join(changeDir, ARTIFACT_FILES[artifact]);
 }
 
-export function getPhaseSummaryPath(changeDir: string, phaseId: string): string {
-  return join(changeDir, 'phases', `${phaseId}-summary.md`);
+export function getPhasePlanPath(changeDir: string, phaseId: string): string {
+  return join(changeDir, 'phases', `${phaseId}.md`);
 }
 
 export function getPhasesDir(changeDir: string): string {
@@ -59,15 +53,13 @@ export function createPromptTemplate(branchName: string): string {
   ].join('\n');
 }
 
-export function createPhaseSummaryTemplate(phaseId: string, phaseTitle: string): string {
+export function createPhasePlanTemplate(phaseId: string, phaseTitle: string): string {
   return [
     `# ${phaseId}: ${phaseTitle}`,
     '',
-    '## Files Changed',
+    '## Tasks',
     '',
-    '| File | Change |',
-    '|------|--------|',
-    '<!-- | path/to/file.ts | One-line description | -->',
+    `<!-- - [ ] ${phaseId.replace('PH-', '')}.1 Specific task with file paths -->`,
     '',
   ].join('\n');
 }

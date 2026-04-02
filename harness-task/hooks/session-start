@@ -38,7 +38,7 @@ fi
 # 4. Read optional project context
 ###############################################################################
 project_context_section=""
-project_dir="${CLAUDE_PROJECT_DIR:-}"
+project_dir="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 if [ -n "$project_dir" ]; then
     context_md="${project_dir}/.harness-task/context.md"
@@ -106,59 +106,46 @@ if [ -n "$project_dir" ]; then
                     fi
                     ;;
                 proposing)
-                    refined_file="${change_dir}/refined-prompt.md"
-                    if [ -f "$refined_file" ]; then
-                        refined_content=$(cat "$refined_file" 2>/dev/null || true)
-                        changes_section="${changes_section}\\n#### Refined Prompt\\n${refined_content}\\n"
+                    prompt_file="${change_dir}/prompt.md"
+                    if [ -f "$prompt_file" ]; then
+                        prompt_content=$(cat "$prompt_file" 2>/dev/null || true)
+                        changes_section="${changes_section}\\n#### Prompt\\n${prompt_content}\\n"
                     fi
                     ;;
                 executing)
-                    # Inject proposal summary + current phase + completed phase summaries
+                    # Inject proposal summary
                     proposal_file="${change_dir}/proposal.md"
                     if [ -f "$proposal_file" ]; then
                         proposal_content=$(cat "$proposal_file" 2>/dev/null || true)
                         changes_section="${changes_section}\\n#### Proposal\\n${proposal_content}\\n"
                     fi
 
-                    # Show completed phase summaries (compressed)
-                    phases_dir="${change_dir}/phases"
-                    if [ -d "$phases_dir" ]; then
-                        for summary_file in "$phases_dir"/*-summary.md; do
-                            [ -f "$summary_file" ] || continue
-                            summary_name="$(basename "$summary_file" .md)"
-                            summary_content=$(cat "$summary_file" 2>/dev/null || true)
-                            changes_section="${changes_section}\\n#### ${summary_name}\\n${summary_content}\\n"
-                        done
+                    # Show completed phase summaries from status.json
+                    completed_summaries=$(jq -r '[.phases[] | select(.status == "completed") | "\(.id): \(.title) — \(.summary // "no summary")"] | join("\\n")' "$status_file" 2>/dev/null || true)
+                    if [ -n "$completed_summaries" ]; then
+                        changes_section="${changes_section}\\n#### Completed Phases\\n${completed_summaries}\\n"
                     fi
 
-                    # Show current phase tasks
+                    # Show current phase plan
                     if [ -n "$current_phase" ] && [ "$current_phase" != "null" ]; then
-                        tasks_file="${change_dir}/tasks.md"
-                        if [ -f "$tasks_file" ]; then
-                            phase_num="${current_phase#PH-}"
-                            phase_section=$(sed -n "/^## Phase ${phase_num}:/,/^## Phase /p" "$tasks_file" 2>/dev/null | head -n -1 || true)
-                            if [ -n "$phase_section" ]; then
-                                changes_section="${changes_section}\\n#### Current Phase Tasks\\n${phase_section}\\n"
-                            fi
+                        phase_plan="${change_dir}/phases/${current_phase}.md"
+                        if [ -f "$phase_plan" ]; then
+                            phase_plan_content=$(cat "$phase_plan" 2>/dev/null || true)
+                            changes_section="${changes_section}\\n#### Current Phase Plan\\n${phase_plan_content}\\n"
                         fi
                     fi
                     ;;
                 verifying)
-                    # Inject proposal + all phase summaries
+                    # Inject proposal + all phase summaries from status.json
                     proposal_file="${change_dir}/proposal.md"
                     if [ -f "$proposal_file" ]; then
                         proposal_content=$(cat "$proposal_file" 2>/dev/null || true)
                         changes_section="${changes_section}\\n#### Proposal\\n${proposal_content}\\n"
                     fi
 
-                    phases_dir="${change_dir}/phases"
-                    if [ -d "$phases_dir" ]; then
-                        for summary_file in "$phases_dir"/*-summary.md; do
-                            [ -f "$summary_file" ] || continue
-                            summary_name="$(basename "$summary_file" .md)"
-                            summary_content=$(cat "$summary_file" 2>/dev/null || true)
-                            changes_section="${changes_section}\\n#### ${summary_name}\\n${summary_content}\\n"
-                        done
+                    all_summaries=$(jq -r '[.phases[] | "\(.id): \(.title) [\(.status)] — \(.summary // "no summary")"] | join("\\n")' "$status_file" 2>/dev/null || true)
+                    if [ -n "$all_summaries" ]; then
+                        changes_section="${changes_section}\\n#### Phase Summaries\\n${all_summaries}\\n"
                     fi
                     ;;
             esac

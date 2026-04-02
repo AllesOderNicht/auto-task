@@ -3,10 +3,7 @@ const SAFE_SEGMENT_PATTERN = /[^A-Za-z0-9._-]+/g;
 const EDGE_SEPARATOR_PATTERN = /^[_\-.]+|[_\-.]+$/g;
 const ARTIFACT_FILES = {
     'prompt': 'prompt.md',
-    'refined-prompt': 'refined-prompt.md',
     'proposal': 'proposal.md',
-    'design': 'design.md',
-    'tasks': 'tasks.md',
     'status': 'status.json',
 };
 export function getChangeDirName(branchName) {
@@ -23,8 +20,8 @@ export function getChangeDirPath(projectDir, branchName) {
 export function getArtifactPath(changeDir, artifact) {
     return join(changeDir, ARTIFACT_FILES[artifact]);
 }
-export function getPhaseSummaryPath(changeDir, phaseId) {
-    return join(changeDir, 'phases', `${phaseId}-summary.md`);
+export function getPhasePlanPath(changeDir, phaseId) {
+    return join(changeDir, 'phases', `${phaseId}.md`);
 }
 export function getPhasesDir(changeDir) {
     return join(changeDir, 'phases');
@@ -41,15 +38,13 @@ export function createPromptTemplate(branchName) {
         '',
     ].join('\n');
 }
-export function createPhaseSummaryTemplate(phaseId, phaseTitle) {
+export function createPhasePlanTemplate(phaseId, phaseTitle) {
     return [
         `# ${phaseId}: ${phaseTitle}`,
         '',
-        '## Files Changed',
+        '## Tasks',
         '',
-        '| File | Change |',
-        '|------|--------|',
-        '<!-- | path/to/file.ts | One-line description | -->',
+        `<!-- - [ ] ${phaseId.replace('PH-', '')}.1 Specific task with file paths -->`,
         '',
     ].join('\n');
 }

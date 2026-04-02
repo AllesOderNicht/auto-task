@@ -13,18 +13,17 @@ For each phase in `status.json`:
 
 ### 1. Load Context
 
-Read these files before starting:
+Read before starting:
 - `proposal.md` — overall goals and scope
-- `design.md` — technical approach
-- `tasks.md` — current phase's task list
-- All completed `phases/PH-{n}-summary.md` files — what was done before
+- `phases/PH-{n}.md` — current phase's plan and task list
+- `status.json` — completed phase summaries (in each phase's `summary` field)
 
-Do NOT read the full conversation history from previous phases. The phase summaries are your compressed context.
+Do NOT read the full conversation history from previous phases. The phase summaries in `status.json` are your compressed context.
 
 ### 2. Start Phase
 
 - Update `status.json`: set current phase to `in_progress`.
-- Read the current phase's tasks from `tasks.md`.
+- Read the current phase's tasks from `phases/PH-{n}.md`.
 
 ### 3. Execute Tasks with TDD
 
@@ -37,34 +36,19 @@ For each task in the current phase:
 2. **Commit** after each task or logical group:
    - Format: `{type}({scope}): description [{branch-name}]`
 
-### 4. Generate Phase Summary
+### 4. Update Status with Summary
 
-After all tasks in a phase are complete, create `phases/PH-{n}-summary.md`:
-
-```markdown
-# PH-{n}: {Phase Title}
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| path/to/file.ts | One-line description of what changed |
-| path/to/test.ts | One-line description of what changed |
-```
-
-This is a **minimal** summary — just file changes and one-line descriptions. No full code, no detailed explanations.
-
-### 5. Update Status
-
-- Update `status.json`: mark phase as `completed`, set `summary_file`.
+After all tasks in a phase are complete, update `status.json`:
+- Mark phase as `completed`.
+- Write a **minimal** `summary` string: file changes with one-line descriptions, pipe-separated.
+  Example: `"src/auth.ts: added login handler | tests/auth.test.ts: login unit tests"`
 - If more phases remain: advance `current_phase` to the next pending phase.
 - If all phases complete: update stage to `verifying`.
 
-### 6. Compress Context
+### 5. Compress Context
 
 Before starting the next phase:
-- Summarize the current phase's work into its summary file (already done in step 4).
-- For the next phase, only load: `proposal.md` + `design.md` + all completed phase summaries.
+- For the next phase, only load: `proposal.md` + completed phase summaries from `status.json`.
 - Do NOT carry implementation details, code snippets, or conversation history from previous phases.
 
 ## Error Handling
@@ -73,6 +57,21 @@ Before starting the next phase:
 - If a build breaks, fix it before marking the phase complete.
 - If blocked, update `status.json` and report to the user — do not improvise.
 - If the task plan needs adjustment, discuss with the user first.
+
+## Bug Reports
+
+If the user reports a bug during phase execution:
+
+1. **Do NOT attempt to fix it inline** — the current execution context may share the same blind spots that caused the bug.
+2. **Invoke `harness-task:bugfix`** — this dispatches a `bug-investigator` agent with a zero-trust mindset that independently re-reads all artifacts (prompt, proposal, phase plans, source code, tests).
+3. **The bugfix skill handles everything**: investigation, user discussion, proposal/phase file updates, and `status.json` reset.
+4. **After bugfix completes**, the executing skill resumes from the updated `current_phase` in `status.json` as if it were a normal resume.
+
+Signs that the user is reporting a bug (not a normal test failure):
+- "There's a bug in..." or "This doesn't work correctly"
+- Describes unexpected behavior that differs from the proposal
+- Reports a problem discovered after a phase was marked completed
+- Mentions issues that span multiple phases or require plan changes
 
 ## Resuming Execution
 

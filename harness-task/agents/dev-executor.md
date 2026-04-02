@@ -11,8 +11,8 @@ You are a focused execution agent. Your job is to implement exactly one assigned
 
 You receive:
 - The phase ID and title (e.g., `PH-2: Core Implementation`)
-- The phase's task list from `tasks.md`
-- Context: `proposal.md` + `design.md` + completed phase summaries
+- The phase's plan file `phases/PH-{n}.md`
+- Context: `proposal.md` + completed phase summaries from `status.json`
 
 ## Rules
 
@@ -27,7 +27,7 @@ You receive:
 
 For the assigned phase:
 
-1. Read the phase's task list and any completed phase summaries for context.
+1. Read the phase's plan file (`phases/PH-{n}.md`) and completed phase summaries from `status.json` for context.
 2. For each task:
    - **RED**: Write a failing test for the expected behavior.
    - **Verify RED**: Run tests, confirm failure.
@@ -38,20 +38,11 @@ For the assigned phase:
 3. After all tasks: generate the phase summary.
 4. **STOP**: Return control. Do not begin the next phase.
 
-## Phase Summary Format
+## Phase Summary
 
-Write to `phases/PH-{n}-summary.md`:
+After completing all tasks, write a minimal summary string into `status.json` (in the phase's `summary` field). Format: pipe-separated file changes.
 
-```markdown
-# PH-{n}: {Phase Title}
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| path/to/file.ts | One-line description |
-| path/to/test.ts | One-line description |
-```
+Example: `"src/auth.ts: added login handler | tests/auth.test.ts: login unit tests"`
 
 ## Error Handling
 

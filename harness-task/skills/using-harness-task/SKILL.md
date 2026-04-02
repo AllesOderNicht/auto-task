@@ -23,8 +23,8 @@ init → prompting → refining → proposing → executing → verifying
 |-------|-------------|
 | `init` | Create branch + directory + empty prompt.md |
 | `prompting` | User fills in prompt.md with requirements |
-| `refining` | Round 1 brainstorming: read code, ask >=5 questions, generate refined-prompt.md (NO subagent) |
-| `proposing` | Round 2 brainstorming: subagent explores code, generate proposal.md + design.md + tasks.md |
+| `refining` | Round 1 brainstorming: read code, ask >=5 questions, update prompt.md with refined requirements (NO subagent) |
+| `proposing` | Round 2 brainstorming: subagent explores code, generate proposal.md + per-phase plan files in phases/ |
 | `executing` | Execute phases with TDD, generate summaries, compress context between phases |
 | `verifying` | Final TDD verification + handoff |
 
@@ -36,6 +36,7 @@ init → prompting → refining → proposing → executing → verifying
 | `harness-task:brainstorming` | (sub-skill) | Two-round brainstorming (refining + proposing) |
 | `harness-task:executing` | (sub-skill) | Phase-by-phase execution with TDD |
 | `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
+| `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |
 | `harness-task:list-changes` | `/alles-list-changes` | View all changes and their status |
 | `harness-task:archive` | `/alles-archive` | Archive a completed change |
 | `harness-task:review` | `/review {name}` | Structured code review |
@@ -51,10 +52,10 @@ At session start, the following are automatically injected:
 
 1. **Always check for active changes** before starting new work.
 2. **Two-round brainstorming is mandatory** — Round 1 refines the prompt, Round 2 produces the proposal.
-3. **Never skip brainstorming** — even "simple" changes need both rounds.
+3. **Never skip brainstorming** — even "simple" changes need both rounds. After round 1 completes, immediately continue to round 2.
 4. **TDD is mandatory** during every phase of execution.
 5. **Every stage change must be persisted** to `status.json` immediately.
-6. **Compress context between phases** — carry only proposal + completed phase summaries.
+6. **Compress context between phases** — carry only proposal + completed phase summaries from `status.json`.
 7. **Commit messages must follow format**: `{type}(scope): description [{branch-name}]`
 8. **Use branch names as change identities**.
 9. **Always run the startup hook first** when invoking `/alles-dev`.
@@ -64,15 +65,12 @@ At session start, the following are automatically injected:
 
 ```
 .dev-changes/{branch-name}/
-  prompt.md              # Original user requirements
-  refined-prompt.md      # After round 1 brainstorming
-  proposal.md            # What and why
-  design.md              # How (technical design)
-  tasks.md               # Phased task list
-  status.json            # Stage + phase progress
+  prompt.md              # User requirements (updated with refined content after round 1)
+  proposal.md            # What, why, and how
+  status.json            # Stage + phase progress + phase summaries
   phases/
-    PH-1-summary.md      # Phase 1 completion summary
-    PH-2-summary.md      # Phase 2 completion summary
+    PH-1.md              # Phase 1 plan (tasks)
+    PH-2.md              # Phase 2 plan (tasks)
 ```
 
 ## Red Flags

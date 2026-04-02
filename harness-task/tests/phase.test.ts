@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePhases, toPhaseProgress, formatPhaseSummary } from '../src/utils/phase.js';
+import { parsePhases, toPhaseProgress } from '../src/utils/phase.js';
 
 describe('parsePhases', () => {
   it('parses phases and tasks from tasks.md content', () => {
@@ -79,22 +79,3 @@ describe('toPhaseProgress', () => {
   });
 });
 
-describe('formatPhaseSummary', () => {
-  it('formats a minimal phase summary', () => {
-    const summary = formatPhaseSummary('PH-1', 'Project Setup', [
-      { file: 'src/index.ts', description: 'Added entry point' },
-      { file: 'package.json', description: 'Updated dependencies' },
-    ]);
-
-    expect(summary).toContain('# PH-1: Project Setup');
-    expect(summary).toContain('## Files Changed');
-    expect(summary).toContain('| src/index.ts | Added entry point |');
-    expect(summary).toContain('| package.json | Updated dependencies |');
-  });
-
-  it('handles empty file changes', () => {
-    const summary = formatPhaseSummary('PH-1', 'Setup', []);
-    expect(summary).toContain('# PH-1: Setup');
-    expect(summary).toContain('| File | Change |');
-  });
-});
