@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   STAGE_ORDER,
+  QUESTION_CHECKPOINT_TOTAL,
   createInitialStatus,
   updateStage,
   getNextStage,
@@ -11,6 +12,8 @@ import {
   startPhase,
   resetToPhase,
   updatePhaseReview,
+  advanceQuestionCheckpoint,
+  hasCompletedQuestionCheckpoints,
 } from '../src/utils/status.js';
 
 describe('STAGE_ORDER', () => {
@@ -283,5 +286,125 @@ describe('updatePhaseReview', () => {
     updated = updatePhaseReview(updated, 'PH-1', 7.5, 2);
     expect(updated.phases[0].review_score).toBe(7.5);
     expect(updated.phases[0].review_round).toBe(2);
+  });
+});
+
+describe('advanceQuestionCheckpoint', () => {
+  it('increments from 0 to 1 after the first question checkpoint', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    const updated = advanceQuestionCheckpoint(status);
+    expect(updated.question_checkpoint).toBe(1);
+  });
+
+  it('increments through all 3 question checkpoints', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
+    expect(status.question_checkpoint).toBe(1);
+    status = advanceQuestionCheckpoint(status);
+    expect(status.question_checkpoint).toBe(2);
+    status = advanceQuestionCheckpoint(status);
+    expect(status.question_checkpoint).toBe(3);
+  });
+
+  it('does not increment beyond the total checkpoint count', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    const updated = advanceQuestionCheckpoint(status);
+    expect(updated.question_checkpoint).toBe(QUESTION_CHECKPOINT_TOTAL);
+  });
+
+  it('treats undefined question_checkpoint as 0', () => {
+    let status = createInitialStatus('b', 'd');
+    expect(status.question_checkpoint).toBeUndefined();
+    const updated = advanceQuestionCheckpoint(status);
+    expect(updated.question_checkpoint).toBe(1);
+  });
+
+  it('migrates from legacy brainstorming_round when present', () => {
+    const status = {
+      ...createInitialStatus('b', 'd'),
+      stage: 'refining' as const,
+      brainstorming_round: 2,
+    };
+
+    const updated = advanceQuestionCheckpoint(status);
+
+    expect(updated.question_checkpoint).toBe(3);
+    expect('brainstorming_round' in updated).toBe(false);
+  });
+});
+
+describe('hasCompletedQuestionCheckpoints', () => {
+  it('returns false when question_checkpoint is undefined', () => {
+    const status = createInitialStatus('b', 'd');
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
+  });
+
+  it('returns false when question_checkpoint is less than 3', () => {
+    let status = createInitialStatus('b', 'd');
+    status = advanceQuestionCheckpoint(status);
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
+    status = advanceQuestionCheckpoint(status);
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
+  });
+
+  it('returns true when question_checkpoint equals 3', () => {
+    let status = createInitialStatus('b', 'd');
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(true);
+  });
+
+  it('treats legacy brainstorming_round as checkpoint progress', () => {
+    const status = {
+      ...createInitialStatus('b', 'd'),
+      brainstorming_round: 3,
+    };
+
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(true);
+  });
+});
+
+describe('updateStage with question checkpoint gate', () => {
+  it('throws when advancing from refining to proposing without completing all question checkpoints', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    expect(() => updateStage(status, 'proposing')).toThrow(
+      /Cannot advance from refining to proposing/,
+    );
+  });
+
+  it('throws when question_checkpoint is only 2', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    expect(() => updateStage(status, 'proposing')).toThrow(
+      /question_checkpoint is 2, must be 3/,
+    );
+  });
+
+  it('allows advancing from refining to proposing when all 3 question checkpoints complete', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    status = advanceQuestionCheckpoint(status);
+    const updated = updateStage(status, 'proposing');
+    expect(updated.stage).toBe('proposing');
+  });
+
+  it('does not gate other stage transitions', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'prompting');
+    expect(status.stage).toBe('prompting');
+    status = updateStage(status, 'refining');
+    expect(status.stage).toBe('refining');
   });
 });

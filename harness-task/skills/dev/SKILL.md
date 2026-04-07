@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Start or resume a development change. Orchestrates the 6-stage workflow — init, prompting, refining, proposing, executing, verifying.
+description: Start or resume a development change. Orchestrates the 6-stage workflow — init, prompting, refining, proposing, executing, verifying — with checkpoint-based question refinement.
 user-invocable: true
 ---
 
@@ -42,38 +42,50 @@ init → prompting → refining → proposing → executing → verifying
 
 ### Stage: `refining`
 
-- **Invoke skill `harness-task:brainstorming` — Round 1**.
-- Read code, ask at least 5 structured questions (NO subagent).
-- Update `prompt.md` with refined requirements based on user answers.
-- Advance stage to `proposing`.
-- **After advancing, immediately continue to the `proposing` stage below** — do NOT stop or wait for user input between rounds.
+- **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
+- **Invoke skill `harness-task:brainstorming`** — three question checkpoints execute within this stage, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3).
+- **Checkpoint 1 — Prompt-Input Clarification** (NO subagent, `question_checkpoint`: 0 → 1):
+  - First: Read `prompt.md` (user's raw requirements) and explore the codebase to build context.
+  - Ask at least 3 prompt-input questions (AskQuestion, single batch). Assume the user has not read the code.
+  - Update `status.json`: set `question_checkpoint` to `1`. Stage remains `refining`.
+- **Checkpoint 2 — Follow-up Clarification** (NO subagent, `question_checkpoint`: 1 → 2):
+  - Analyze Checkpoint 1 answers for divergence points (ambiguity, code-intent conflict, missing decisions).
+  - Ask at least 3 follow-up questions (AskQuestion, single batch).
+  - Update `prompt.md` with refined requirements from both rounds.
+  - Update `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
+- **Checkpoint 3 — Proposal Transition** (USE subagent after the final questions, `question_checkpoint`: 2 → 3):
+  - Ask at least 3 proposal-transition questions before generating artifacts.
+  - Compress prior context first.
+  - Update `prompt.md` with the final proposal-transition decisions and read the updated file as single source of truth.
+  - Use subagent to explore codebase.
+  - Generate `proposal.md` (product-level: module names + interfaces, NO file paths, MUST/MUST NOT/MAY boundaries).
+  - Generate per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
+  - Update `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
+- **After Checkpoint 3, immediately continue to `proposing` stage below.**
+- **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 3`.
 
 ### Stage: `proposing`
 
-- **Invoke skill `harness-task:brainstorming` — Round 2**.
-- Compress previous context (summarize round 1 into a short block, then work from the updated `prompt.md` only).
-- Use subagent to explore the codebase in parallel.
-- Generate `proposal.md` and per-phase plan files (`phases/PH-{n}.md`).
-- Populate `status.json` with phase list.
+- **User confirmation stage** — no new artifacts are generated here.
+- Read `proposal.md` and present the proposal summary to the user.
 - **Wait for user confirmation** before advancing.
-- Advance stage to `executing`.
+- After confirmation, advance stage to `executing`.
 
 ### Stage: `executing`
 
-- **Invoke skill `harness-task:executing`** for the current phase.
+- **Invoke skill `harness-task:executing`** — the main agent executes each phase directly.
 - For each phase:
-  1. Load context: `proposal.md` + completed phase summaries from `status.json`.
-  2. Read the current phase's plan from `phases/PH-{n}.md`.
-  3. Execute tasks with TDD (invoke `harness-task:tdd`).
-  4. Update `status.json`: mark phase completed, write summary string.
-  5. **Adversarial review** (invoke `harness-task:phase-review`):
+  0. **Phase Preamble**: reload context from files — read `proposal.md` + completed phase summaries from `status.json` + current `phases/PH-{n}.md`. Do NOT reference prior conversation history.
+  1. Execute tasks with TDD (invoke `harness-task:tdd`). The main agent writes all code directly with full access to skills and rules.
+  2. Update `status.json`: mark phase completed, write summary string.
+  3. **Adversarial review** (invoke `harness-task:phase-review`):
      - A `phase-reviewer` subagent is spawned with isolated context (only prompt.md + proposal.md + production code diff).
      - The reviewer scores the code across 6 weighted dimensions (7.0/10 pass threshold).
      - If score < 7.0: reviewer fixes code, a new reviewer re-evaluates (up to 3 rounds).
      - If 3 rounds fail: execution halts, user must decide how to proceed.
-     - Review granularity adapts: <= 8 changed files = phase-level review; > 8 files = per-task review during Step 3.
-  6. Advance `current_phase` to the next pending phase.
-  7. Compress context before starting next phase.
+     - Review granularity adapts: <= 8 changed files = phase-level review; > 8 files = per-task review during Step 1.
+  4. **Context compression**: use compact tool if available; otherwise treat prior conversation as unavailable.
+  5. Advance `current_phase` to the next pending phase.
 - When all phases are completed, advance stage to `verifying`.
 
 **Bug Reports**: If the user reports a bug during execution (describes unexpected behavior, test failures, or incorrect output), **stop current execution** and invoke `harness-task:bugfix`. The bugfix skill dispatches a zero-trust `bug-investigator` agent that independently audits all artifacts, discusses findings with the user, then patches proposal/phase files and resets `status.json`. After bugfix completes, resume executing from the reset phase.
@@ -93,8 +105,8 @@ When `/alles-dev` is invoked and `status.json` already exists:
 |---------------|--------|
 | `init` | Advance to `prompting` |
 | `prompting` | Check prompt.md, advance if filled |
-| `refining` | Resume round 1 brainstorming, then immediately continue to round 2 |
-| `proposing` | Resume round 2 brainstorming (read updated prompt.md), or re-generate if files missing |
+| `refining` | Check `question_checkpoint` in `status.json` to determine resume point: `0` → Checkpoint 1 (prompt-input questions), `1` → Checkpoint 2 (follow-up questions), `2` → Checkpoint 3 (proposal-transition questions and proposal generation). Each checkpoint gate ensures correct ordering. |
+| `proposing` | Proposal and phase plans already exist. Present proposal to user for confirmation. If files are missing, go back to `refining` and restart. |
 | `executing` | Find current phase from `status.json`, resume execution. If phases were reset by a bugfix (earlier phases completed but later ones pending), this is a post-bugfix resume — continue normally from `current_phase`. |
 | `verifying` | Re-run verification |
 
@@ -105,6 +117,7 @@ When `/alles-dev` is invoked and `status.json` already exists:
   "branch": "feature/my-change",
   "change_dir": "feature-my-change",
   "stage": "executing",
+  "question_checkpoint": 3,
   "created_at": "2026-04-02T00:00:00.000Z",
   "updated_at": "2026-04-02T01:00:00.000Z",
   "current_phase": "PH-2",
@@ -115,6 +128,12 @@ When `/alles-dev` is invoked and `status.json` already exists:
   ]
 }
 ```
+
+**`question_checkpoint` values:**
+- `0` or absent: question checkpoints not started
+- `1`: Checkpoint 1 (prompt-input clarification) completed
+- `2`: Checkpoint 2 (follow-up clarification) completed
+- `3`: Checkpoint 3 (proposal transition) completed — all checkpoints done, stage can advance
 
 ## Commit Format
 
@@ -130,6 +149,9 @@ Examples:
 1. **Never skip the startup hook** — it must run before anything else.
 2. **Never skip stages** — always follow the linear progression.
 3. **Always persist stage changes** to `status.json` immediately.
-4. **Always wait for user confirmation** before advancing from `proposing` to `executing`.
-5. **TDD is mandatory** in every phase during `executing`.
-6. **Compress context** between phases — carry only proposal + completed phase summaries from `status.json`.
+4. **Three question checkpoints are mandatory** — each checkpoint updates `question_checkpoint` in `status.json` (1/2/3). Each checkpoint must ask at least 3 questions. Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 3`.
+5. **Always wait for user confirmation** before advancing from `proposing` to `executing`.
+6. **Main agent executes phases directly** — write code, run tests, and generate summaries yourself. No delegation to execution subagents.
+7. **TDD is mandatory** in every phase during `executing`.
+8. **Phase Preamble is mandatory** — every phase starts by reading proposal, summaries, and phase plan from files. Never rely on conversation history.
+9. **Compress context after each phase** — use compact if available; otherwise treat prior conversation as unavailable. Always start the next phase with a fresh Preamble.

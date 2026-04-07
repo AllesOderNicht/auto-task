@@ -1,7 +1,7 @@
 {
   "name": "harness-task",
   "displayName": "Harness Task",
-  "description": "Structured 6-stage development workflow: init → prompting → refining → proposing → executing → verifying. Two-round brainstorming, phased TDD execution, and context compression.",
+  "description": "Structured 6-stage development workflow: init → prompting → refining → proposing → executing → verifying. Three checkpoint-based question stages, phased TDD execution, and context compression.",
   "version": "2.0.0",
   "author": {
     "name": "harness-task"

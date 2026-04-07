@@ -34,6 +34,22 @@ export interface ChangeStatus {
   updated_at: string;
   current_phase: string | null;
   phases: PhaseProgress[];
+  question_checkpoint?: number;
+}
+
+type LegacyBrainstormingStatus = {
+  brainstorming_round?: number;
+};
+
+type StatusWithLegacyCheckpoint = ChangeStatus & LegacyBrainstormingStatus;
+
+function stripLegacyBrainstormingRound(status: StatusWithLegacyCheckpoint): ChangeStatus {
+  const { brainstorming_round: _legacyBrainstormingRound, ...cleanStatus } = status;
+  return cleanStatus;
+}
+
+function getQuestionCheckpoint(status: StatusWithLegacyCheckpoint): number {
+  return status.question_checkpoint ?? status.brainstorming_round ?? 0;
 }
 
 export function createInitialStatus(branchName: string, changeDir: string): ChangeStatus {
@@ -49,8 +65,17 @@ export function createInitialStatus(branchName: string, changeDir: string): Chan
 }
 
 export function updateStage(status: ChangeStatus, newStage: Stage): ChangeStatus {
+  if (status.stage === 'refining' && newStage === 'proposing') {
+    const questionCheckpoint = getQuestionCheckpoint(status);
+    if (!hasCompletedQuestionCheckpoints(status)) {
+      throw new Error(
+        `Cannot advance from refining to proposing: question_checkpoint is ${questionCheckpoint}, must be ${QUESTION_CHECKPOINT_TOTAL}`,
+      );
+    }
+  }
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     stage: newStage,
     updated_at: new Date().toISOString(),
   };
@@ -69,8 +94,9 @@ export function isComplete(status: ChangeStatus): boolean {
 }
 
 export function setPhases(status: ChangeStatus, phases: PhaseProgress[]): ChangeStatus {
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     phases,
     current_phase: phases.length > 0 ? phases[0].id : null,
     updated_at: new Date().toISOString(),
@@ -102,8 +128,9 @@ export function advancePhase(
     nextPending.status = 'in_progress';
   }
 
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     phases,
     current_phase: nextPending?.id ?? null,
     updated_at: new Date().toISOString(),
@@ -118,8 +145,9 @@ export function startPhase(status: ChangeStatus, phaseId: string): ChangeStatus 
     return p;
   });
 
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     phases,
     current_phase: phaseId,
     updated_at: new Date().toISOString(),
@@ -143,11 +171,43 @@ export function updatePhaseReview(
     return p;
   });
 
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     phases,
     updated_at: new Date().toISOString(),
   };
+}
+
+export const QUESTION_CHECKPOINT_TOTAL = 3;
+
+/**
+ * Advance question progress by one checkpoint.
+ * Checkpoint 1 = questions asked after prompt input.
+ * Checkpoint 2 = follow-up questions after the first checkpoint.
+ * Checkpoint 3 = proposal-transition questions and planning completed.
+ * Stage remains `refining` — only advances to `proposing` via updateStage
+ * after all 3 checkpoints are complete.
+ */
+export function advanceQuestionCheckpoint(status: ChangeStatus): ChangeStatus {
+  const current = getQuestionCheckpoint(status);
+  if (current >= QUESTION_CHECKPOINT_TOTAL) {
+    return stripLegacyBrainstormingRound(status);
+  }
+  const cleanStatus = stripLegacyBrainstormingRound(status);
+  return {
+    ...cleanStatus,
+    question_checkpoint: current + 1,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Check whether all 3 question checkpoints are complete,
+ * which is required before stage can advance from `refining` to `proposing`.
+ */
+export function hasCompletedQuestionCheckpoints(status: ChangeStatus): boolean {
+  return getQuestionCheckpoint(status) >= QUESTION_CHECKPOINT_TOTAL;
 }
 
 /**
@@ -169,8 +229,9 @@ export function resetToPhase(status: ChangeStatus, phaseId: string): ChangeStatu
     return p;
   });
 
+  const cleanStatus = stripLegacyBrainstormingRound(status);
   return {
-    ...status,
+    ...cleanStatus,
     stage: 'executing',
     phases,
     current_phase: phaseId,

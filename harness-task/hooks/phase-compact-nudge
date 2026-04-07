@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PostToolUse hook: detect phase completion in status.json writes
+# and inject a mandatory compact instruction.
+#
+# Triggered on Write|Edit of status.json during the executing stage.
+# If a phase was just completed and more phases remain, nudges the
+# model to call compact before starting the next phase.
+
+###############################################################################
+# 1. Read JSON from stdin
+###############################################################################
+INPUT=$(cat)
+
+###############################################################################
+# 2. Only care about writes to status.json
+###############################################################################
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty')
+[[ "$FILE_PATH" == *status.json ]] || exit 0
+
+###############################################################################
+# 3. Resolve the actual file on disk
+###############################################################################
+[ -f "$FILE_PATH" ] || exit 0
+
+###############################################################################
+# 4. Must be in executing stage
+###############################################################################
+STAGE=$(jq -r '.stage // empty' "$FILE_PATH" 2>/dev/null || true)
+[ "$STAGE" = "executing" ] || exit 0
+
+###############################################################################
+# 5. Check: has completed phase(s) AND has remaining pending phase(s)
+###############################################################################
+HAS_COMPLETED=$(jq '[.phases[] | select(.status == "completed")] | length > 0' "$FILE_PATH" 2>/dev/null || echo "false")
+HAS_PENDING=$(jq '[.phases[] | select(.status == "pending")] | length > 0' "$FILE_PATH" 2>/dev/null || echo "false")
+
+[ "$HAS_COMPLETED" = "true" ] && [ "$HAS_PENDING" = "true" ] || exit 0
+
+###############################################################################
+# 6. No in_progress phase — means we just finished one and haven't started next
+###############################################################################
+HAS_IN_PROGRESS=$(jq '[.phases[] | select(.status == "in_progress")] | length > 0' "$FILE_PATH" 2>/dev/null || echo "false")
+[ "$HAS_IN_PROGRESS" = "false" ] || exit 0
+
+###############################################################################
+# 7. Emit nudge
+###############################################################################
+jq -n '{
+  hookSpecificOutput: {
+    hookEventName: "PostToolUse",
+    additionalContext: "⚠️ PHASE COMPLETED — MANDATORY CONTEXT COMPRESSION ⚠️\nA phase was just marked completed and more phases remain.\nYou MUST call the `compact` tool NOW before starting the next phase.\nDo NOT proceed to the next Phase Preamble without compacting first.\nThis is a mandatory step per harness-task executing rules (Step 4: Context Compression)."
+  }
+}'
+
+exit 0

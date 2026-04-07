@@ -23,9 +23,9 @@ init → prompting → refining → proposing → executing → verifying
 |-------|-------------|
 | `init` | Create branch + directory + empty prompt.md |
 | `prompting` | User fills in prompt.md with requirements |
-| `refining` | Round 1 brainstorming: read code, ask >=5 questions, update prompt.md with refined requirements (NO subagent) |
-| `proposing` | Round 2 brainstorming: subagent explores code, generate proposal.md + per-phase plan files in phases/ |
-| `executing` | Execute phases with TDD, generate summaries, compress context between phases |
+| `refining` | Three question checkpoints execute here, tracked by `question_checkpoint` (0/1/2/3). Checkpoint 1: prompt-input questions (>=3). Checkpoint 2: follow-up questions (>=3), update prompt.md. Checkpoint 3: proposal-transition questions (>=3), then generate proposal.md + phase plans. Stage advances only when `question_checkpoint === 3`. |
+| `proposing` | User confirmation stage — present proposal, wait for user approval before proceeding |
+| `executing` | Main agent executes phases directly with TDD, generates summaries, compresses context between phases |
 | `verifying` | Final TDD verification + handoff |
 
 ## Available Skills
@@ -33,7 +33,7 @@ init → prompting → refining → proposing → executing → verifying
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | `harness-task:dev` | `/alles-dev [branch-name]` | Start or resume a development change |
-| `harness-task:brainstorming` | (sub-skill) | Two-round brainstorming (refining + proposing) |
+| `harness-task:brainstorming` | (sub-skill) | Three checkpoint-based question stages (all checkpoints within refining stage, tracked by question_checkpoint) |
 | `harness-task:executing` | (sub-skill) | Phase-by-phase execution with TDD |
 | `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
 | `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |
@@ -51,34 +51,42 @@ At session start, the following are automatically injected:
 ## Key Rules
 
 1. **Always check for active changes** before starting new work.
-2. **Two-round brainstorming is mandatory** — Round 1 refines the prompt, Round 2 produces the proposal.
-3. **Never skip brainstorming** — even "simple" changes need both rounds. After round 1 completes, immediately continue to round 2.
-4. **TDD is mandatory** during every phase of execution.
-5. **Every stage change must be persisted** to `status.json` immediately.
-6. **Compress context between phases** — carry only proposal + completed phase summaries from `status.json`.
-7. **Commit messages must follow format**: `{type}(scope): description [{branch-name}]`
-8. **Use branch names as change identities**.
-9. **Always run the startup hook first** when invoking `/alles-dev`.
-10. **Wait for user confirmation** before starting execution.
+2. **Three question checkpoints are mandatory** — Checkpoint 1 (prompt-input questions >=3), Checkpoint 2 (follow-up questions >=3), Checkpoint 3 (proposal-transition questions >=3, then proposal + phase plans). All execute within the `refining` stage.
+3. **Each checkpoint is tracked** — `question_checkpoint` in `status.json` (0→1→2→3). Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 3`.
+4. **Never skip the question checkpoints** — even "simple" changes need all three checkpoints.
+5. **Resumable via `question_checkpoint`** — if interrupted during `refining`, check `question_checkpoint` to resume from the correct checkpoint.
+6. **Main agent executes phases directly** — write code, run tests, and generate summaries yourself. No delegation to execution subagents.
+7. **TDD is mandatory** during every phase of execution.
+8. **Phase Preamble is mandatory** — every phase starts by reading proposal, summaries, and phase plan from files. Never rely on conversation history from previous phases.
+9. **Compress context after each phase** — use compact if available; otherwise treat prior conversation as unavailable. Always start the next phase with a fresh Preamble.
+10. **Commit messages must follow format**: `{type}(scope): description [{branch-name}]`
+11. **Use branch names as change identities**.
+12. **Always run the startup hook first** when invoking `/alles-dev`.
+13. **Wait for user confirmation** before starting execution.
 
 ## Task Directory Structure
 
 ```
 .dev-changes/{branch-name}/
-  prompt.md              # User requirements (updated with refined content after round 1)
-  proposal.md            # What, why, and how
-  status.json            # Stage + phase progress + phase summaries
+  prompt.md              # User requirements (refined across the question checkpoints)
+  proposal.md            # Product-level spec: goal, user stories, module design, MUST/MUST NOT/MAY boundaries
+  status.json            # Stage + question_checkpoint + phase progress + phase summaries
   phases/
-    PH-1.md              # Phase 1 plan (tasks)
-    PH-2.md              # Phase 2 plan (tasks)
+    PH-1.md              # Self-contained phase plan (files, data structures, tests, edge cases, TDD approach)
+    PH-2.md              # Self-contained phase plan
 ```
 
 ## Red Flags
 
 | Thought | Reality |
 |---------|---------|
-| "This is too simple for brainstorming" | Simple changes have unexamined assumptions. Do both rounds. |
-| "I'll skip refining and go straight to proposing" | Round 1 builds understanding. Never skip it. |
+| "This is too simple for structured questions" | Simple changes have unexamined assumptions. Complete all three question checkpoints. |
+| "I'll skip refining and go straight to proposing" | All three question checkpoints must complete (`question_checkpoint === 3`) before advancing. |
+| "I'll skip the follow-up questions and go straight to proposal" | Each checkpoint is gated: Checkpoint 2 requires `question_checkpoint >= 1`, Checkpoint 3 requires `question_checkpoint >= 2`. No skipping. |
+| "I'll ask everything at once" | The checkpoints have different goals. Checkpoint 1 asks prompt-input questions, Checkpoint 2 resolves follow-up ambiguities, Checkpoint 3 asks proposal-transition questions. Each checkpoint still needs at least 3 questions. |
+| "The proposal should list specific files" | Proposal is a product-level document. Use module names and interfaces, never file paths. File details go in phase plans. |
+| "A short task list is enough for each phase" | Phase plans must be self-contained with files, data structures, test pseudo-code, edge cases, no-touch list, and TDD approach — without estimated line counts. |
 | "Tests can come later" | TDD is mandatory. No production code without failing test. |
 | "I'll just commit without the tag" | Commit format is enforced. Include `[{branch-name}]`. |
 | "I remember the plan from the last phase" | Read the phase summaries. Don't rely on memory. |
+| "I'll skip the Preamble, I already know the context" | Phase Preamble is mandatory. Always reload from files. |

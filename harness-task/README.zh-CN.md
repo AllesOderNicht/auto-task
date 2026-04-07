@@ -12,8 +12,8 @@ init → prompting → refining → proposing → executing → verifying
 |------|------|
 | **init** | 创建分支 + 目录 + 空的 prompt.md |
 | **prompting** | 用户填写 prompt.md，描述需求 |
-| **refining** | 第一轮头脑风暴：阅读代码，提出至少5个问题，更新 prompt.md 为精炼需求（不使用子代理） |
-| **proposing** | 第二轮头脑风暴：子代理并行探索代码库，生成 proposal.md + 分阶段计划文件 |
+| **refining** | 这里会执行 3 个提问检查点：先问至少 3 个 prompt 输入后的问题，再问至少 3 个跟进问题，最后在 refine 转 proposal 前再问至少 3 个过渡问题，然后才生成产物 |
+| **proposing** | 向用户展示 proposal.md 和分阶段计划文件，等待确认 |
 | **executing** | 按 phase 执行，每个 phase 内 TDD，完成后生成摘要，压缩上下文 |
 | **verifying** | 最终 TDD 验证 + 交接 |
 
@@ -41,9 +41,9 @@ init → prompting → refining → proposing → executing → verifying
 
 ```
 .dev-changes/{分支名}/
-  prompt.md              # 用户需求（第一轮头脑风暴后更新为精炼版本）
+  prompt.md              # 用户需求（在多个提问检查点中持续精炼）
   proposal.md            # 提案（做什么、为什么、怎么做）
-  status.json            # 阶段状态 + phase 进度 + 完成摘要
+  status.json            # 阶段状态 + question_checkpoint + phase 进度 + 完成摘要
   phases/
     PH-1.md              # Phase 1 计划（任务清单）
     PH-2.md              # Phase 2 计划（任务清单）
@@ -51,10 +51,10 @@ init → prompting → refining → proposing → executing → verifying
 
 ## 核心特性
 
-- **两轮头脑风暴**：第一轮通过结构化问题深入理解需求。第二轮使用子代理并行探索代码库，生成提案和分阶段计划。
+- **三个提问检查点**：分别发生在 prompt 输入后、第一批回答之后，以及 refine 转 proposal 的交接点。每个检查点都至少提出 3 个问题，之后流程才能继续推进。
 - **分阶段执行**：任务被拆分为独立的 phase。每个 phase 使用 TDD 执行，完成后生成最小化摘要。
 - **上下文压缩**：phase 之间只携带提案和已完成 phase 的摘要。避免上下文窗口膨胀。
-- **断点续跑**：任何中断都可以恢复。每次阶段/phase 变更后状态会立即持久化到 `status.json`。
+- **断点续跑**：任何中断都可以恢复。每次阶段/phase 变更后状态会立即持久化到 `status.json`，包括 `question_checkpoint`。
 - **TDD 强制执行**：每个任务都遵循红-绿-重构循环。没有失败的测试就不能写生产代码。
 
 ## 配置
