@@ -1,0 +1,19 @@
+{
+  "name": "harness-task",
+  "version": "2.0.0",
+  "description": "Structured 6-stage development workflow plugin for Claude Code and Cursor",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "license": "MIT"
+}

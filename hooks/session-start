@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# SessionStart hook for harness-task plugin
+# Injects dev-change context with 6-stage sliding-window compression.
+
+###############################################################################
+# 1. Determine plugin root from script location
+###############################################################################
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+###############################################################################
+# 2. JSON escape helper
+###############################################################################
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+###############################################################################
+# 3. Read the using-harness-task SKILL.md
+###############################################################################
+skill_content=""
+skill_file="${PLUGIN_ROOT}/skills/using-harness-task/SKILL.md"
+if [ -f "$skill_file" ]; then
+    skill_content=$(cat "$skill_file" 2>/dev/null || echo "Error reading using-harness-task skill")
+else
+    skill_content="(using-harness-task SKILL.md not found at ${skill_file})"
+fi
+
+###############################################################################
+# 4. Read optional project context
+###############################################################################
+project_context_section=""
+project_dir="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
+if [ -n "$project_dir" ]; then
+    context_md="${project_dir}/.harness-task/context.md"
+    config_yaml="${project_dir}/.harness-task/config.yaml"
+
+    if [ -f "$context_md" ] || [ -f "$config_yaml" ]; then
+        project_context_section="\\n## Harness-Task Project Context\\n"
+        if [ -f "$context_md" ]; then
+            context_content=$(cat "$context_md" 2>/dev/null || echo "Error reading context.md")
+            project_context_section="${project_context_section}\\n### context.md\\n${context_content}\\n"
+        fi
+        if [ -f "$config_yaml" ]; then
+            config_content=$(cat "$config_yaml" 2>/dev/null || echo "Error reading config.yaml")
+            project_context_section="${project_context_section}\\n### config.yaml\\n${config_content}\\n"
+        fi
+    fi
+fi
+
+###############################################################################
+# 5. Scan active changes with 6-stage sliding window
+###############################################################################
+changes_section=""
+
+if [ -n "$project_dir" ]; then
+    dev_changes_dir="${project_dir}/.dev-changes"
+
+    if [ -d "$dev_changes_dir" ]; then
+        found_active=0
+
+        for status_file in "$dev_changes_dir"/*/status.json; do
+            [ -f "$status_file" ] || continue
+
+            stage=$(jq -r '.stage // empty' "$status_file" 2>/dev/null || true)
+            [ -z "$stage" ] && continue
+
+            change_dir="$(dirname "$status_file")"
+            change_dir_name="$(basename "$change_dir")"
+            branch=$(jq -r '.branch // empty' "$status_file" 2>/dev/null || true)
+            current_phase=$(jq -r '.current_phase // empty' "$status_file" 2>/dev/null || true)
+            phase_count=$(jq '.phases | length' "$status_file" 2>/dev/null || echo "0")
+            completed_count=$(jq '[.phases[] | select(.status == "completed")] | length' "$status_file" 2>/dev/null || echo "0")
+
+            if [ "$found_active" -eq 0 ]; then
+                changes_section="\\n## Active Dev Changes\\n"
+                found_active=1
+            fi
+
+            changes_section="${changes_section}\\n### Change: ${branch:-$change_dir_name}\\n"
+            changes_section="${changes_section}Directory: ${change_dir_name}\\n"
+            changes_section="${changes_section}Stage: ${stage}\\n"
+
+            if [ "$phase_count" -gt 0 ]; then
+                changes_section="${changes_section}Phase Progress: ${completed_count}/${phase_count}\\n"
+                [ -n "$current_phase" ] && [ "$current_phase" != "null" ] && \
+                    changes_section="${changes_section}Current Phase: ${current_phase}\\n"
+            fi
+
+            # Stage-specific context injection
+            case "$stage" in
+                init|prompting|refining)
+                    prompt_file="${change_dir}/prompt.md"
+                    if [ -f "$prompt_file" ]; then
+                        prompt_content=$(cat "$prompt_file" 2>/dev/null || true)
+                        changes_section="${changes_section}\\n#### Prompt\\n${prompt_content}\\n"
+                    fi
+                    ;;
+                proposing)
+                    prompt_file="${change_dir}/prompt.md"
+                    if [ -f "$prompt_file" ]; then
+                        prompt_content=$(cat "$prompt_file" 2>/dev/null || true)
+                        changes_section="${changes_section}\\n#### Prompt\\n${prompt_content}\\n"
+                    fi
+                    ;;
+                executing)
+                    # Inject proposal summary
+                    proposal_file="${change_dir}/proposal.md"
+                    if [ -f "$proposal_file" ]; then
+                        proposal_content=$(cat "$proposal_file" 2>/dev/null || true)
+                        changes_section="${changes_section}\\n#### Proposal\\n${proposal_content}\\n"
+                    fi
+
+                    # Show completed phase summaries from status.json
+                    completed_summaries=$(jq -r '[.phases[] | select(.status == "completed") | "\(.id): \(.title) — \(.summary // "no summary")"] | join("\\n")' "$status_file" 2>/dev/null || true)
+                    if [ -n "$completed_summaries" ]; then
+                        changes_section="${changes_section}\\n#### Completed Phases\\n${completed_summaries}\\n"
+                    fi
+
+                    # Show current phase plan
+                    if [ -n "$current_phase" ] && [ "$current_phase" != "null" ]; then
+                        phase_plan="${change_dir}/phases/${current_phase}.md"
+                        if [ -f "$phase_plan" ]; then
+                            phase_plan_content=$(cat "$phase_plan" 2>/dev/null || true)
+                            changes_section="${changes_section}\\n#### Current Phase Plan\\n${phase_plan_content}\\n"
+                        fi
+                    fi
+                    ;;
+                verifying)
+                    # Inject proposal + all phase summaries from status.json
+                    proposal_file="${change_dir}/proposal.md"
+                    if [ -f "$proposal_file" ]; then
+                        proposal_content=$(cat "$proposal_file" 2>/dev/null || true)
+                        changes_section="${changes_section}\\n#### Proposal\\n${proposal_content}\\n"
+                    fi
+
+                    all_summaries=$(jq -r '[.phases[] | "\(.id): \(.title) [\(.status)] — \(.summary // "no summary")"] | join("\\n")' "$status_file" 2>/dev/null || true)
+                    if [ -n "$all_summaries" ]; then
+                        changes_section="${changes_section}\\n#### Phase Summaries\\n${all_summaries}\\n"
+                    fi
+                    ;;
+            esac
+        done
+    fi
+fi
+
+###############################################################################
+# 6. Build session context
+###############################################################################
+skill_escaped=$(escape_for_json "$skill_content")
+project_context_escaped=$(escape_for_json "$project_context_section")
+changes_escaped=$(escape_for_json "$changes_section")
+
+session_context="<EXTREMELY_IMPORTANT>\\nYou have the harness-task development workflow plugin installed.\\n\\n**Below is the full content of your 'harness-task:using-harness-task' skill — your introduction to using harness-task. For all other skills, use the 'Skill' tool:**\\n\\n---\\n${skill_escaped}\\n${project_context_escaped}\\n${changes_escaped}\\n</EXTREMELY_IMPORTANT>"
+
+###############################################################################
+# 7. Output JSON with platform detection
+###############################################################################
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+    printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+    printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+    printf '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

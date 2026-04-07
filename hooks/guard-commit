@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PreToolUse hook: enforce commit message format
+# Format: {type}(scope): description [{branch-name}]
+# Types: feat|fix|refactor|chore|docs|style|perf|test
+# The (scope) part is optional.
+
+###############################################################################
+# 1. Read JSON from stdin
+###############################################################################
+INPUT=$(cat)
+
+###############################################################################
+# 2. Extract command
+###############################################################################
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+[ -z "$CMD" ] && exit 0
+
+###############################################################################
+# 3. Check if this is a git commit command (skip if not, or if --amend)
+###############################################################################
+echo "$CMD" | grep -q 'git commit' || exit 0
+echo "$CMD" | grep -q '\-\-amend' && exit 0
+
+###############################################################################
+# 4. Validate commit message format: {type}(scope): description [{branch-name}]
+###############################################################################
+
+# Check type prefix (with optional scope)
+if ! echo "$CMD" | grep -qE '(feat|fix|refactor|chore|docs|style|perf|test)(\(.+\))?:\s'; then
+    jq -n '{
+        hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: "Commit message must follow: {type}(scope): description [{branch-name}]. Types: feat|fix|refactor|chore|docs|style|perf|test"
+        }
+    }'
+    exit 0
+fi
+
+# Check for [{branch-name}] identifier
+if ! echo "$CMD" | grep -qE '\[.+\]'; then
+    jq -n '{
+        hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: "Commit message must include a branch identifier [{branch-name}]. Format: {type}(scope): description [{branch-name}]"
+        }
+    }'
+    exit 0
+fi
+
+exit 0
