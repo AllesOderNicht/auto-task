@@ -43,24 +43,23 @@ init → prompting → refining → proposing → executing → verifying
 ### Stage: `refining`
 
 - **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
-- **Invoke skill `harness-task:brainstorming`** — three question checkpoints execute within this stage, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3).
-- **Checkpoint 1 — Prompt-Input Clarification** (NO subagent, `question_checkpoint`: 0 → 1):
-  - First: Read `prompt.md` (user's raw requirements) and explore the codebase to build context.
-  - Ask at least 3 prompt-input questions (AskQuestion, single batch). Assume the user has not read the code.
-  - Update `status.json`: set `question_checkpoint` to `1`. Stage remains `refining`.
-- **Checkpoint 2 — Follow-up Clarification** (NO subagent, `question_checkpoint`: 1 → 2):
-  - Analyze Checkpoint 1 answers for divergence points (ambiguity, code-intent conflict, missing decisions).
-  - Ask at least 3 follow-up questions (AskQuestion, single batch).
-  - Update `prompt.md` with refined requirements from both rounds.
-  - Update `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
-- **Checkpoint 3 — Proposal Transition** (USE subagent after the final questions, `question_checkpoint`: 2 → 3):
-  - Ask at least 3 proposal-transition questions before generating artifacts.
-  - Compress prior context first.
-  - Update `prompt.md` with the final proposal-transition decisions and read the updated file as single source of truth.
-  - Use subagent to explore codebase.
-  - Generate `proposal.md` (product-level: module names + interfaces, NO file paths, MUST/MUST NOT/MAY boundaries).
-  - Generate per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
-  - Update `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
+- **Invoke skill `harness-task:brainstorming`** — the brainstorming skill dispatches an `analysis-agent` subagent with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3).
+- **Checkpoint 1 — Prompt-Input Clarification** (`question_checkpoint`: 0 → 1, tool budget: 15 code-reading calls, NO subagent):
+  - Agent reads `prompt.md` (user's raw requirements) and explores the codebase to build context.
+  - Agent asks at least 3 prompt-input questions (AskQuestion, single batch). Assumes the user has not read the code.
+  - Agent updates `status.json`: set `question_checkpoint` to `1`. Stage remains `refining`.
+- **Checkpoint 2 — Follow-up Clarification** (`question_checkpoint`: 1 → 2, tool budget: 5 targeted re-reads, NO subagent):
+  - Agent analyzes Checkpoint 1 answers for divergence points (ambiguity, code-intent conflict, missing decisions).
+  - Agent asks at least 3 follow-up questions (AskQuestion, single batch).
+  - Agent updates `prompt.md` with refined requirements from both rounds.
+  - Agent updates `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
+- **Checkpoint 3 — Proposal Transition** (`question_checkpoint`: 2 → 3, tool budget: 10 + explore subagents):
+  - Agent asks at least 3 proposal-transition questions before generating artifacts.
+  - Agent compresses prior context, reads updated `prompt.md` as single source of truth.
+  - Agent launches explore subagent(s) for deep code exploration.
+  - Agent generates `proposal.md` (product-level: module names + interfaces, NO file paths, MUST/MUST NOT/MAY boundaries).
+  - Agent generates per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
+  - Agent updates `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
 - **After Checkpoint 3, immediately continue to `proposing` stage below.**
 - **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 3`.
 

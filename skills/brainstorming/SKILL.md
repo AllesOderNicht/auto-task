@@ -1,315 +1,104 @@
 ---
 name: brainstorming
-description: Three checkpoint-based question stages inside refining. Checkpoint 1 follows prompt input, checkpoint 2 follows the first answers, checkpoint 3 happens at the refine-to-proposal handoff. Each checkpoint asks at least 3 questions and progress is tracked in status.json via question_checkpoint (1/2/3).
+description: Orchestrates three checkpoint-based question stages inside refining. Dispatches the analysis-agent subagent to drive code-grounded Q&A, divergence detection, and proposal generation. Progress tracked in status.json via question_checkpoint (0→1→2→3).
 ---
 
-# Brainstorming — Three Question Checkpoints
+# Brainstorming — Analysis Agent Orchestration
 
-This skill drives three distinct question checkpoints, all executed within the `refining` stage. Progress is tracked in `status.json` via the `question_checkpoint` field (`0 -> 1 -> 2 -> 3`). The stage can only advance from `refining` to `proposing` when `question_checkpoint === 3`.
+This skill orchestrates the `refining` stage by dispatching the `analysis-agent` subagent. The agent drives three question checkpoints, tracked in `status.json` via `question_checkpoint` (`0 → 1 → 2 → 3`). The stage can only advance from `refining` to `proposing` when `question_checkpoint === 3`.
 
 **Checkpoint overview:**
 
 | Checkpoint | Name | Goal | status.json update |
 |------------|------|------|--------------------|
-| 1 | Prompt-Input Clarification | Ask at least 3 broad questions after reading the prompt and code | `question_checkpoint: 1` |
-| 2 | Follow-up Clarification | Ask at least 3 follow-up questions after checkpoint 1 answers | `question_checkpoint: 2` |
-| 3 | Proposal Transition | Ask at least 3 proposal-shaping questions, then generate `proposal.md` + self-contained phase plans | `question_checkpoint: 3`, then set stage to `proposing` |
+| 1 | Prompt-Input Clarification | Broad questions grounded in actual code (at least 3) | `question_checkpoint: 1` |
+| 2 | Follow-up Clarification | Divergence detection + follow-up questions (at least 3) | `question_checkpoint: 2` |
+| 3 | Proposal Transition | Proposal-shaping questions, then generate `proposal.md` + self-contained phase plans | `question_checkpoint: 3`, then stage → `proposing` |
+
+## When to Invoke
+
+Called by `harness-task:dev` when the stage is `refining` and `question_checkpoint < 3`.
+
+**Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage).
 
 ---
 
-## Checkpoint 1: Prompt-Input Clarification (`question_checkpoint`: 0 -> 1)
+## Orchestration Workflow
 
-**Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Checkpoint 1 does NOT start until the user has input their prompt.
+### Step 1: Read Current Progress
 
-**Gate check**: Read `status.json` — if `question_checkpoint >= 1`, skip to Checkpoint 2.
+Read `status.json` from the change directory. Determine the current `question_checkpoint` value (default `0` if absent).
 
-**Goal**: Explore the problem space across multiple dimensions with broad questions, grounded in actual code.
+| `question_checkpoint` | Agent starts from |
+|-----------------------|-------------------|
+| `0` or absent | Phase 1 — read code + prompt, ask prompt-input questions |
+| `1` | Phase 2 — analyze Phase 1 answers, ask follow-up questions |
+| `2` | Phase 3 — ask proposal-transition questions, generate proposal + phase plans |
+| `3` | All checkpoints complete — skip dispatch, proceed to `proposing` |
 
-**Constraints**: NO subagent. Work entirely in the current conversation context.
+If `question_checkpoint >= 3`, do NOT dispatch the agent. Proceed directly to the `proposing` stage.
 
-### Steps
+### Step 2: Collect Context
 
-1. **Read `prompt.md` and the codebase** — Before asking any questions:
-   - **First**, read `prompt.md` to understand the user's raw request.
-   - **Then**, explore the project to build technical context around the prompt:
-     - Read key project files: `package.json`, `README.md`, config files, entry points.
-     - Scan directory structure to understand the project layout.
-     - Read source files most relevant to the prompt.
-   - Budget: use as many tool calls as needed to understand the project sufficiently.
+Gather the inputs for the agent:
 
-2. **Ask at least 3 prompt-input questions** — Present questions using the AskQuestion tool (multiple-choice format) in a **single batch**.
+1. **Change directory path** — the full path to `.dev-changes/{safe-branch-dir}/` (contains `prompt.md`, `status.json`, and any existing artifacts).
+2. **Current `question_checkpoint` value** — so the agent knows which phase to execute.
+3. **Project context** — `.harness-task/context.md` and `.harness-task/specs/` if available.
 
-   **Requirements:**
-   - Assume the user has NOT read the code. Each question must include enough code context for the user to make an informed choice.
-   - Cover at least 3 different dimensions: scope boundaries, technical direction, priorities, compatibility, error handling strategy, performance vs simplicity trade-offs.
-   - Use multiple-choice options (2-5 per question) grounded in actual code patterns discovered during code reading.
+### Step 3: Dispatch Analysis Agent
 
-3. **Update `status.json`** — Set `question_checkpoint` to `1`. Stage remains `refining`.
+Dispatch the `analysis-agent` with an isolated subagent session:
 
-4. **Immediately proceed to Checkpoint 2.**
+- **Isolated context**: A new subagent session with NO conversation history from the parent workflow.
+- **Task prompt**: Combine the collected inputs into a structured message:
 
-### Checkpoint 1 Checklist
+```
+You are analyzing change "{branch-name}".
 
-- [ ] Read `prompt.md` (user's raw requirements)
-- [ ] Read project structure and relevant source code
-- [ ] Ask at least 3 prompt-input questions (AskQuestion, single batch)
-- [ ] Receive answers
-- [ ] Update `status.json`: set `question_checkpoint` to `1`
-- [ ] Immediately proceed to Checkpoint 2 (do NOT stop here)
+## Change Directory
+{change directory path}
 
----
+## Current Progress
+question_checkpoint: {value}
 
-## Checkpoint 2: Follow-up Clarification (`question_checkpoint`: 1 -> 2)
+## Project Context
+{content of .harness-task/context.md, if available}
 
-**Gate check**: Read `status.json` — `question_checkpoint` must be `>= 1`. If `>= 2`, skip to Checkpoint 3.
+Execute from the current question_checkpoint. Follow your three-phase protocol:
+- Phase 1 (checkpoint 0→1): Read code + prompt, ask prompt-input questions.
+- Phase 2 (checkpoint 1→2): Divergence detection, follow-up questions, update prompt.md.
+- Phase 3 (checkpoint 2→3): Proposal-transition questions, deep code exploration, generate proposal.md + phase plans.
 
-**Goal**: Resolve ambiguities, conflicts, and missing decisions identified from Checkpoint 1 answers.
+Persist question_checkpoint to status.json after each phase.
+```
 
-**Constraints**: NO subagent. Work entirely in the current conversation context.
+**Tool budget** (enforced by the agent internally):
 
-### Steps
+| Phase | Max code-reading tool calls | Subagent |
+|-------|-----------------------------|----------|
+| Phase 1 (Checkpoint 1) | 15 | Forbidden |
+| Phase 2 (Checkpoint 2) | 5 (targeted re-reads only) | Forbidden |
+| Phase 3 (Checkpoint 3) | 10 + explore subagent(s) | Allowed |
 
-1. **Analyze Checkpoint 1 answers** using the **three-rule divergence detection**:
+### Step 4: Verify Artifacts
 
-   | Rule | What to look for |
-   |------|------------------|
-   | **Ambiguity/Contradiction** | Answers that are vague, conflict with each other, or leave room for multiple interpretations |
-   | **Code-Intent Conflict** | Places where the user's stated intent conflicts with existing code patterns, dependencies, or architecture |
-   | **Missing Key Decisions** | Critical decisions not yet made: error handling strategy, migration approach, backward compatibility, data validation rules |
+After the agent completes, verify the expected outputs exist:
 
-2. **Ask at least 3 follow-up questions** — Present follow-up questions using AskQuestion (multiple-choice format) in a **single batch**, each targeting a specific divergence point identified above. Every question must:
-   - Explicitly state which divergence it addresses.
-   - Provide concrete options with clear trade-off descriptions.
+| `question_checkpoint` reached | Expected artifacts |
+|-------------------------------|--------------------|
+| `1` | `status.json` updated with `question_checkpoint: 1` |
+| `2` | `prompt.md` rewritten with refined requirements; `status.json` updated with `question_checkpoint: 2` |
+| `3` | `prompt.md` finalized; `proposal.md` generated; `phases/PH-{n}.md` files generated; `status.json` updated with `question_checkpoint: 3` and stage set to `proposing` |
 
-3. **Update `prompt.md`** — After receiving all answers from Checkpoint 1 and Checkpoint 2, rewrite `prompt.md` with the refined content:
+If any expected artifact is missing, report the gap to the user — do NOT silently advance.
 
-   ```markdown
-   # Prompt
+### Step 5: Gate Check
 
-   - Branch: `{branch-name}`
+Read `status.json` one final time:
 
-   ## Context
-   <!-- Project context discovered during code reading -->
-
-   ## Requirements
-   <!-- Consolidated from original prompt + Q&A answers -->
-
-   ### Functional Requirements
-   <!-- What the system should do -->
-
-   ### Non-Functional Requirements
-   <!-- Constraints, performance, compatibility -->
-
-   ## Scope
-   ### In Scope
-   <!-- Explicitly included -->
-
-   ### Out of Scope
-   <!-- Explicitly excluded -->
-
-   ## Key Decisions
-   ### Checkpoint 1 Decisions
-   - Q: {question} -> A: {answer} -> Decision: {what this means}
-
-   ### Checkpoint 2 Decisions
-   - Divergence: {what was ambiguous/conflicting} -> Resolution: {decision made}
-   ```
-
-4. **Update `status.json`** — Set `question_checkpoint` to `2`. Stage remains `refining`.
-
-5. **Immediately proceed to Checkpoint 3.**
-
-### Checkpoint 2 Checklist
-
-- [ ] Analyze Checkpoint 1 answers for divergence points (3 rules)
-- [ ] Ask at least 3 follow-up questions (AskQuestion, single batch)
-- [ ] Receive answers
-- [ ] Update `prompt.md` with refined requirements (all decisions from Checkpoint 1 + Checkpoint 2)
-- [ ] Update `status.json`: set `question_checkpoint` to `2`
-- [ ] Immediately proceed to Checkpoint 3 (do NOT stop here)
-
----
-
-## Checkpoint 3: Proposal Transition (`question_checkpoint`: 2 -> 3)
-
-**Gate check**: Read `status.json` — `question_checkpoint` must be `>= 2`. If `< 2`, go back to the missing checkpoint.
-
-**Goal**: Ask the final proposal-shaping questions, then generate `proposal.md` as a product-level document and per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specifications.
-
-**Constraints**: Ask questions in the current conversation context first. After answers arrive, USE subagent to explore code. Compress prior context before proposal generation.
-
-### Context Compression
-
-Before starting proposal generation for Checkpoint 3, compress the earlier question context:
-
-**Capability-based detection** (do whichever applies):
-- If you have access to a conversation compaction tool (e.g., `compact` in Claude Code): use it to compress context, preserving only the updated `prompt.md` path and Checkpoint 3 goals.
-- Otherwise (e.g., in Cursor): treat all prior conversation history as unavailable. Do NOT reference prior conversation content.
-
-In **both** cases:
-- Read `prompt.md` (updated after Checkpoint 2, and appended again after Checkpoint 3 answers if needed) as the authoritative input.
-- Do NOT carry the full earlier conversation history.
-- Proceed with proposal work using `prompt.md` as the single source of truth.
-
-### Steps
-
-1. **Ask at least 3 proposal-transition questions** — Use AskQuestion in a **single batch** to clarify final implementation-shaping choices before generating the proposal. Focus on:
-   - phase boundaries,
-   - architecture trade-offs,
-   - rollout or compatibility posture,
-   - testing expectations,
-   - explicit non-goals.
-
-2. **Update `prompt.md`** — Append the final answers under a `Checkpoint 3 Decisions` section so the proposal is generated from the full refined record.
-
-3. **Read `prompt.md`** — This is your single source of truth for requirements.
-
-4. **Explore code with subagent** — Launch subagent(s) to explore the codebase:
-   - Use `explore` type subagents to investigate different code areas in parallel.
-   - Areas to explore: source code structure, existing patterns, test infrastructure, dependencies, config.
-   - Each subagent should return: key files found, patterns observed, potential impact areas, existing data structures and interfaces.
-
-5. **Generate `proposal.md`** — A product-level document that serves as the authoritative specification. It defines WHAT to build and WHY, with module-level technical direction but NO specific file paths.
-
-   ```markdown
-   # Proposal: {title}
-
-   ## Goal
-   <!-- What this change achieves, in 2-3 sentences -->
-
-   ## Background
-   <!-- Current state of the system and why the change is needed -->
-
-   ## User Stories
-   <!-- Concrete user scenarios that this change enables -->
-   <!-- Format: As a {role}, I want {action}, so that {benefit} -->
-
-   ## Technical Approach
-   <!-- Architecture and module-level design decisions -->
-   <!-- Reference module names and key interface designs -->
-   <!-- e.g., "AuthService should expose login(credentials) and logout(sessionId)" -->
-   <!-- Do NOT include specific file paths -->
-
-   ## Boundary Definition
-   ### In Scope (MUST)
-   - MUST: {requirement}
-
-   ### Out of Scope (MUST NOT)
-   - MUST NOT: {constraint}
-
-   ### Optional (MAY)
-   - MAY: {nice-to-have}
-
-   ## Risks
-   <!-- What could go wrong and mitigation strategies -->
-
-   ## Phase Overview
-   <!-- Each phase has ONLY a title and one-sentence description -->
-   <!-- Detailed technical specs live in phases/PH-{n}.md -->
-   | Phase | Title | Description |
-   |-------|-------|-------------|
-   | PH-1 | {title} | {one sentence} |
-   | PH-2 | {title} | {one sentence} |
-   ```
-
-   **Proposal writing rules:**
-   - NO file paths anywhere in the document.
-   - Module names and interface signatures are allowed (e.g., `EventBus.emit(event)`, `AuthService.login`).
-   - Boundary definitions use MUST/MUST NOT/MAY keywords explicitly.
-   - Phase Overview contains only titles and one-line summaries — all technical detail goes into phase plan files.
-
-6. **Generate per-phase plan files** — Create `phases/PH-{n}.md` for each phase. Each phase plan is a **self-contained technical specification** that contains everything needed to execute the phase without referencing other phase plans. Do not add estimated line counts to phase plans.
-
-   ```markdown
-   # PH-{n}: {Phase Title}
-
-   ## Context Summary
-   <!-- For PH-1: summarize the proposal's goal and technical approach -->
-   <!-- For PH-2+: summarize completed phases from status.json summaries -->
-   <!-- This section makes the phase plan self-contained -->
-
-   ## Files to Modify
-   <!-- Every file that will be created, modified, or read in this phase -->
-   | File | Action | Purpose |
-   |------|--------|---------|
-   | {path} | CREATE/MODIFY/READ | {why} |
-
-   ## Data Structure Design
-   <!-- New or modified data structures, types, interfaces -->
-   <!-- Use language-appropriate pseudo-code or type definitions -->
-
-   ## State Transitions
-   <!-- How system state changes during this phase -->
-   <!-- Use state machine notation or transition tables when applicable -->
-
-   ## Sub-tasks
-   - [ ] {n}.1 {specific task description}
-   - [ ] {n}.2 {specific task description}
-   <!-- Each sub-task should be small enough for one TDD cycle -->
-
-   ## Test Cases
-   <!-- Test scenarios with pseudo-code skeletons -->
-   <!-- Include test name and input/output pairs, NOT full implementation -->
-   | Test Name | Input | Expected Output |
-   |-----------|-------|-----------------|
-   | {descriptive name} | {input data} | {expected result} |
-
-   ### Test Pseudo-code
-   <!-- Skeleton structure for key tests -->
-   test('{descriptive name}', () => {
-     // given: {setup}
-     // when: {action}
-     // then: {assertion}
-   });
-
-   ## Edge Cases
-   <!-- Boundary conditions and unusual inputs to handle -->
-   - {edge case description} -> {expected behavior}
-
-   ## No-Touch List
-   <!-- Files, modules, and interfaces that MUST NOT be modified in this phase -->
-   <!-- Prevents unintended side effects -->
-   | Item | Reason |
-   |------|--------|
-   | {file/module/interface} | {why it must not be touched} |
-
-   ## TDD Approach
-   <!-- For each sub-task: what test to write first, what behavior to verify -->
-   | Sub-task | RED: Test to Write First | GREEN: Minimal Implementation |
-   |----------|--------------------------|------------------------------|
-   | {n}.1 | {test description} | {implementation approach} |
-
-   ## Required Skills
-   <!-- Harness-task skills to invoke during this phase -->
-   - `harness-task:tdd` — for each sub-task
-   - `harness-task:phase-review` — after all sub-tasks complete
-   ```
-
-   **Phase plan writing rules:**
-   - Each phase plan MUST be self-contained: a developer should be able to execute it without reading other phase plans.
-   - Context Summary bridges the gap: PH-1 summarizes the proposal; PH-2+ summarizes prior phase summaries from `status.json`.
-   - Sub-tasks must be small enough for a single TDD cycle (RED-GREEN-REFACTOR).
-   - Test Cases provide pseudo-code skeletons (test name + input/output pairs), not full implementations.
-   - No-Touch List explicitly names files/modules/interfaces that must not be modified in this phase.
-   - Order phases by dependency: foundational work first.
-
-7. **Update `status.json`** — Set `question_checkpoint` to `3`, set stage to `proposing`, populate the phases array, and set `current_phase` to the first phase ID.
-
-8. **Wait for user confirmation** — Present the proposal summary and ask the user to confirm before proceeding. Only after confirmation, set stage to `executing`.
-
-### Checkpoint 3 Checklist
-
-- [ ] Ask at least 3 proposal-transition questions
-- [ ] Update `prompt.md` with Checkpoint 3 decisions
-- [ ] Compress prior context
-- [ ] Read `prompt.md` (single source of truth)
-- [ ] Launch subagent(s) to explore codebase
-- [ ] Generate `proposal.md` (product-level, no file paths, MUST/MUST NOT/MAY boundaries)
-- [ ] Generate `phases/PH-{n}.md` plan files (self-contained, no estimated line counts)
-- [ ] Update `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array
-- [ ] Present summary to user
-- [ ] Receive user confirmation
-- [ ] Update `status.json` stage to `executing`
+- If `question_checkpoint === 3` and stage is `proposing`: orchestration is complete. Return control to `harness-task:dev` for user confirmation.
+- If `question_checkpoint < 3`: the agent was interrupted mid-flow. The next invocation of this skill will resume from the current checkpoint (see Resume Behavior).
 
 ---
 
@@ -319,9 +108,32 @@ When resuming a conversation that was interrupted during `refining`, check `ques
 
 | `question_checkpoint` | Resume from |
 |-----------------------|-------------|
-| `0` or undefined | Checkpoint 1 — read code + prompt, ask prompt-input questions |
-| `1` | Checkpoint 2 — analyze Checkpoint 1 answers, ask follow-up questions |
-| `2` | Checkpoint 3 — ask proposal-transition questions, then generate proposal + phase plans |
-| `3` | All checkpoints complete — proceed to `proposing` stage (user confirmation) |
+| `0` or undefined | Dispatch agent from Phase 1 |
+| `1` | Dispatch agent from Phase 2 |
+| `2` | Dispatch agent from Phase 3 |
+| `3` | All checkpoints complete — proceed to `proposing` stage |
 
-**Note**: When resuming from Checkpoint 2 or 3, re-read `prompt.md` as the source of truth. Prior conversation history is unavailable.
+The agent re-reads `prompt.md` as the source of truth on resume. Prior conversation history is unavailable.
+
+---
+
+## Output Artifacts
+
+| Artifact | Written by agent at | Location |
+|----------|---------------------|----------|
+| Updated `prompt.md` | End of Phase 2, appended at Phase 3 | `.dev-changes/{safe-branch-dir}/prompt.md` |
+| `proposal.md` | Phase 3 | `.dev-changes/{safe-branch-dir}/proposal.md` |
+| Phase plans | Phase 3 | `.dev-changes/{safe-branch-dir}/phases/PH-{n}.md` |
+| `status.json` updates | End of each phase | `.dev-changes/{safe-branch-dir}/status.json` |
+
+---
+
+## Rules
+
+1. **Always dispatch the `analysis-agent`** — do NOT execute checkpoint logic inline. The agent handles all code reading, question asking, divergence detection, and artifact generation.
+2. **Isolated context is mandatory** — the agent session must have NO conversation history from the parent workflow.
+3. **Verify artifacts after dispatch** — never assume the agent succeeded; check files exist.
+4. **Gate on `question_checkpoint === 3`** — the stage CANNOT advance from `refining` to `proposing` unless all three checkpoints are complete.
+5. **`prompt.md` is the single source of truth** — after Phase 2, all requirements live in this file.
+6. **`proposal.md` is a mandatory artifact** — Phase 3 must produce it before advancing.
+7. **Phase plans must be self-contained** — each `phases/PH-{n}.md` is executable without reading other plans.
