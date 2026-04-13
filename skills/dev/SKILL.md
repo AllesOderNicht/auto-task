@@ -43,20 +43,20 @@ init → prompting → refining → proposing → executing → verifying
 ### Stage: `refining`
 
 - **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
-- **Invoke skill `harness-task:brainstorming`** — the brainstorming skill dispatches an `analysis-agent` subagent with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3).
-- **Checkpoint 1 — Prompt-Input Clarification** (`question_checkpoint`: 0 → 1, tool budget: 15 code-reading calls, NO subagent):
+- **Invoke skill `harness-task:brainstorming`** — the brainstorming skill dispatches two specialized subagents with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3). The `analysis-agent` handles checkpoints 1–2 (requirement clarification), then the `proposal-agent` handles checkpoint 3 (code-first gap analysis and proposal generation).
+- **Checkpoint 1 — Prompt-Input Clarification** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, tool budget: 15 code-reading calls, NO subagent):
   - Agent reads `prompt.md` (user's raw requirements) and explores the codebase to build context.
   - Agent asks at least 3 prompt-input questions (AskQuestion, single batch). Assumes the user has not read the code.
   - Agent updates `status.json`: set `question_checkpoint` to `1`. Stage remains `refining`.
-- **Checkpoint 2 — Follow-up Clarification** (`question_checkpoint`: 1 → 2, tool budget: 5 targeted re-reads, NO subagent):
+- **Checkpoint 2 — Follow-up Clarification** (`question_checkpoint`: 1 → 2, agent: `analysis-agent`, tool budget: 5 targeted re-reads, NO subagent):
   - Agent analyzes Checkpoint 1 answers for divergence points (ambiguity, code-intent conflict, missing decisions).
   - Agent asks at least 3 follow-up questions (AskQuestion, single batch).
   - Agent updates `prompt.md` with refined requirements from both rounds.
   - Agent updates `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
-- **Checkpoint 3 — Proposal Transition** (`question_checkpoint`: 2 → 3, tool budget: 10 + explore subagents):
-  - Agent asks at least 3 proposal-transition questions before generating artifacts.
+- **Checkpoint 3 — Proposal Transition** (`question_checkpoint`: 2 → 3, agent: `proposal-agent`, tool budget: 10 + explore subagents):
+  - Agent deeply reads the codebase and systematically analyzes `prompt.md` for gaps against the actual code.
+  - Agent asks at least 3 proposal-transition questions grounded in code evidence before generating artifacts.
   - Agent compresses prior context, reads updated `prompt.md` as single source of truth.
-  - Agent launches explore subagent(s) for deep code exploration.
   - Agent generates `proposal.md` (product-level: module names + interfaces, NO file paths, MUST/MUST NOT/MAY boundaries).
   - Agent generates per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
   - Agent updates `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
@@ -104,7 +104,7 @@ When `/alles-dev` is invoked and `status.json` already exists:
 |---------------|--------|
 | `init` | Advance to `prompting` |
 | `prompting` | Check prompt.md, advance if filled |
-| `refining` | Check `question_checkpoint` in `status.json` to determine resume point: `0` → Checkpoint 1 (prompt-input questions), `1` → Checkpoint 2 (follow-up questions), `2` → Checkpoint 3 (proposal-transition questions and proposal generation). Each checkpoint gate ensures correct ordering. |
+| `refining` | Check `question_checkpoint` in `status.json` to determine resume point: `0` → Checkpoint 1 via `analysis-agent` (prompt-input questions), `1` → Checkpoint 2 via `analysis-agent` (follow-up questions), `2` → Checkpoint 3 via `proposal-agent` (code-first gap analysis, proposal-transition questions, and proposal generation). Each checkpoint gate ensures correct ordering. |
 | `proposing` | Proposal and phase plans already exist. Present proposal to user for confirmation. If files are missing, go back to `refining` and restart. |
 | `executing` | Find current phase from `status.json`, resume execution. If phases were reset by a bugfix (earlier phases completed but later ones pending), this is a post-bugfix resume — continue normally from `current_phase`. |
 | `verifying` | Re-run verification |

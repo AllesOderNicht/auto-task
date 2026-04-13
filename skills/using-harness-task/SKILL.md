@@ -23,7 +23,7 @@ init → prompting → refining → proposing → executing → verifying
 |-------|-------------|
 | `init` | Create branch + directory + empty prompt.md |
 | `prompting` | User fills in prompt.md with requirements |
-| `refining` | Three question checkpoints execute here, tracked by `question_checkpoint` (0/1/2/3). Checkpoint 1: prompt-input questions (>=3). Checkpoint 2: follow-up questions (>=3), update prompt.md. Checkpoint 3: proposal-transition questions (>=3), then generate proposal.md + phase plans. Stage advances only when `question_checkpoint === 3`. |
+| `refining` | Three question checkpoints execute here, tracked by `question_checkpoint` (0/1/2/3). Checkpoints 1–2 driven by `analysis-agent`: prompt-input questions (>=3), follow-up questions (>=3), update prompt.md. Checkpoint 3 driven by `proposal-agent`: deep code reading, gap analysis against prompt.md, proposal-transition questions (>=3), then generate proposal.md + phase plans. Stage advances only when `question_checkpoint === 3`. |
 | `proposing` | User confirmation stage — present proposal, wait for user approval before proceeding |
 | `executing` | Main agent executes phases directly with TDD, generates summaries, compresses context between phases |
 | `verifying` | Final TDD verification + handoff |
