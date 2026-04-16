@@ -39,6 +39,7 @@ init → prompting → refining → proposing → executing → verifying
 | `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |
 | `harness-task:list-changes` | `/alles-list-changes` | View all changes and their status |
 | `harness-task:archive` | `/alles-archive` | Archive a completed change: moves directory to `.dev-changes/archive/`, generates `archive.md` summary, marks `status.json` with `archived: true` |
+| `harness-task:project-details` | `/alles-details` | Generate `project-details/NOTES.md` from all archived changes: synthesizes key decisions, caveats, and future notes |
 | `harness-task:review` | `/review {name}` | Structured code review |
 
 ## Context Sources
