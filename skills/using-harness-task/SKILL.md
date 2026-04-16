@@ -38,7 +38,7 @@ init → prompting → refining → proposing → executing → verifying
 | `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
 | `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |
 | `harness-task:list-changes` | `/alles-list-changes` | View all changes and their status |
-| `harness-task:archive` | `/alles-archive` | Archive a completed change |
+| `harness-task:archive` | `/alles-archive` | Archive a completed change: moves directory to `.dev-changes/archive/`, generates `archive.md` summary, marks `status.json` with `archived: true` |
 | `harness-task:review` | `/review {name}` | Structured code review |
 
 ## Context Sources
@@ -74,6 +74,15 @@ At session start, the following are automatically injected:
   phases/
     PH-1.md              # Self-contained phase plan (files, data structures, tests, edge cases, TDD approach)
     PH-2.md              # Self-contained phase plan
+
+.dev-changes/archive/{YYYY-MM-DD}-{branch-name}/
+  prompt.md              # Original requirements
+  proposal.md            # Original proposal
+  status.json            # Final status with archived: true + archived_at timestamp
+  archive.md             # Generated summary: feature summary, key decisions, caveats, future notes
+  phases/
+    PH-1.md
+    PH-2.md
 ```
 
 ## Red Flags
