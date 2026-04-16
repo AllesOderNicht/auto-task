@@ -163,6 +163,19 @@ bugfix 不再是一次随意补丁，而是一次受状态机约束的正式回�
 
 这一步的目标不是“清理文件”，而是把一次 AI 协作开发沉淀为团队资产。
 
+### 8. `/alles-details`
+
+从 `.dev-changes/archive/` 中汇总所有已归档变更，生成 `project-details/NOTES.md`。
+
+它会沉淀：
+
+- 关键设计决策
+- 已知限制与注意事项
+- 后续可复用的经验
+- 按时间倒序排列的变更历史摘要
+
+这一步的目标不是重复归档内容，而是把历史变更整理成更适合团队长期参考的项目级知识笔记。
+
 ## 命令
 
 | 命令 | 说明 |
@@ -171,6 +184,7 @@ bugfix 不再是一次随意补丁，而是一次受状态机约束的正式回�
 | `/alles-bugfix` | 在 `executing` 或 `verifying` 阶段进入 bugfix 流程 |
 | `/alles-list-changes` | 查看所有变更及其状态 |
 | `/alles-archive` | 归档已完成的变更 |
+| `/alles-details` | 从所有归档变更生成 `project-details/NOTES.md` |
 | `/review [分支名]` | 对指定变更执行结构化代码审查 |
 
 ## 任务目录结构

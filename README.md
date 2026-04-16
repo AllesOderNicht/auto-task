@@ -165,6 +165,19 @@ The archive can preserve:
 
 The purpose is not just to clean up files. It is to turn one AI-assisted development cycle into team knowledge.
 
+### 8. `/alles-details`
+
+Aggregate archived changes from `.dev-changes/archive/` and generate `project-details/NOTES.md`.
+
+It captures:
+
+- key design decisions
+- known caveats and limitations
+- notes useful for future work
+- change history summaries ordered newest first
+
+The purpose is not to duplicate each archive, but to distill them into project-level notes the team can keep reusing.
+
 ## Commands
 
 | Command | Description |
@@ -173,6 +186,7 @@ The purpose is not just to clean up files. It is to turn one AI-assisted develop
 | `/alles-bugfix` | Enter the bugfix workflow during `executing` or `verifying` |
 | `/alles-list-changes` | View all changes and their status |
 | `/alles-archive` | Archive a completed change |
+| `/alles-details` | Generate `project-details/NOTES.md` from archived changes |
 | `/review [branch]` | Run a structured code review for a change |
 
 ## Task Directory Structure
