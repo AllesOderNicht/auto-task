@@ -33,7 +33,7 @@ init → prompting → refining → proposing → executing → verifying
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | `harness-task:dev` | `/alles-dev [branch-name]` | Start or resume a development change |
-| `harness-task:brainstorming` | (sub-skill) | Three checkpoint-based question stages (all checkpoints within refining stage, tracked by question_checkpoint) |
+| `harness-task:refining-orchestrator` | (sub-skill) | Three checkpoint-based question stages (all checkpoints within refining stage, tracked by question_checkpoint) |
 | `harness-task:executing` | (sub-skill) | Phase-by-phase execution with TDD |
 | `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
 | `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN_NAME="harness-task"
 MARKETPLACE_KEY="local-harness-task"
 PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE_KEY}"

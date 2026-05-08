@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# hooks/validate-artifacts
+# -----------------------------------------------------------------------------
+# Lightweight gate validator for harness-task workflow transitions.
+#
+# Usage:
+#   hooks/validate-artifacts --change-dir <abs-path> --gate <gate-name>
+#
+# Supported gates (v1):
+#   refining-to-proposing
+#     Asserts that the proposal-agent has produced everything required for the
+#     dev skill to safely advance from `refining` to `proposing`:
+#       - prompt.md exists and is non-empty (not the bare template)
+#       - proposal.md exists and contains H2 sections: Goal, Boundary
+#         Definition, Phase Overview
+#       - phases/PH-*.md contains at least one file; each must contain H2
+#         sections: Files to Modify, Sub-tasks, Test Cases
+#       - status.json: stage === "proposing", question_checkpoint === 3,
+#         phases[] is non-empty, branch / change_dir / current_phase are
+#         non-empty strings
+#
+# Exit codes:
+#   0 = pass
+#   1 = invalid arguments / unsupported gate
+#   2 = validation failed (structured JSON written to stderr)
+#
+# On validation failure, stderr emits a single JSON object:
+#   { ok: false, gate: "<name>", errors: [ { ... } ], warnings: [ ... ] }
+#
+# Designed to be called explicitly by the dev skill (Bash tool) at gate
+# transitions; this script is intentionally NOT registered in hooks.json /
+# hooks-cursor.json (those are event-driven IDE hooks without arguments).
+# -----------------------------------------------------------------------------
+
+###############################################################################
+# 0. Dependencies
+###############################################################################
+if ! command -v jq >/dev/null 2>&1; then
+    echo "validate-artifacts: jq is required but was not found in PATH" >&2
+    exit 1
+fi
+
+###############################################################################
+# 1. Argument parsing
+###############################################################################
+CHANGE_DIR=""
+GATE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --change-dir)
+            CHANGE_DIR="${2:-}"
+            shift 2
+            ;;
+        --gate)
+            GATE="${2:-}"
+            shift 2
+            ;;
+        -h|--help)
+            sed -n '2,40p' "$0"
+            exit 0
+            ;;
+        *)
+            echo "validate-artifacts: unknown argument: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$CHANGE_DIR" ] || [ -z "$GATE" ]; then
+    echo "validate-artifacts: --change-dir and --gate are both required" >&2
+    exit 1
+fi
+
+if [ ! -d "$CHANGE_DIR" ]; then
+    echo "validate-artifacts: change directory does not exist: $CHANGE_DIR" >&2
+    exit 1
+fi
+
+###############################################################################
+# 2. Error accumulation helpers (jq-based, kept minimal — no temp files)
+###############################################################################
+ERRORS_JSON='[]'
+WARNINGS_JSON='[]'
+
+add_error() {
+    # add_error <reason> [file]   (file optional)
+    local reason="$1"
+    local file="${2:-}"
+    if [ -n "$file" ]; then
+        ERRORS_JSON=$(jq -c --arg r "$reason" --arg f "$file" \
+            '. + [{reason: $r, file: $f}]' <<<"$ERRORS_JSON")
+    else
+        ERRORS_JSON=$(jq -c --arg r "$reason" \
+            '. + [{reason: $r}]' <<<"$ERRORS_JSON")
+    fi
+}
+
+add_warning() {
+    local reason="$1"
+    WARNINGS_JSON=$(jq -c --arg r "$reason" \
+        '. + [{reason: $r}]' <<<"$WARNINGS_JSON")
+}
+
+emit_result_and_exit() {
+    local err_count
+    err_count=$(jq 'length' <<<"$ERRORS_JSON")
+    if [ "$err_count" -gt 0 ]; then
+        jq -n --arg gate "$GATE" \
+              --argjson errors "$ERRORS_JSON" \
+              --argjson warnings "$WARNINGS_JSON" \
+              '{ok: false, gate: $gate, errors: $errors, warnings: $warnings}' >&2
+        exit 2
+    fi
+    # success path: silent on stdout/stderr unless warnings exist
+    local warn_count
+    warn_count=$(jq 'length' <<<"$WARNINGS_JSON")
+    if [ "$warn_count" -gt 0 ]; then
+        jq -n --arg gate "$GATE" \
+              --argjson warnings "$WARNINGS_JSON" \
+              '{ok: true, gate: $gate, warnings: $warnings}'
+    fi
+    exit 0
+}
+
+###############################################################################
+# 3. Helpers — file content checks
+###############################################################################
+
+# require_file_nonempty <abs-path> <human-name>
+require_file_nonempty() {
+    local f="$1"
+    local label="$2"
+    if [ ! -f "$f" ]; then
+        add_error "$label is missing" "$f"
+        return 1
+    fi
+    if [ ! -s "$f" ]; then
+        add_error "$label exists but is empty" "$f"
+        return 1
+    fi
+    return 0
+}
+
+# require_h2 <abs-path> <heading-text>
+# Looks for a line starting with `## <heading>` (Markdown H2).
+require_h2() {
+    local f="$1"
+    local heading="$2"
+    if ! grep -qE "^##[[:space:]]+${heading}([[:space:]]|$|:)" "$f"; then
+        add_error "missing H2 section: ${heading}" "$f"
+    fi
+}
+
+###############################################################################
+# 4. Gate: refining-to-proposing
+###############################################################################
+gate_refining_to_proposing() {
+    local prompt_file="$CHANGE_DIR/prompt.md"
+    local proposal_file="$CHANGE_DIR/proposal.md"
+    local status_file="$CHANGE_DIR/status.json"
+    local phases_dir="$CHANGE_DIR/phases"
+
+    # ---- prompt.md ----
+    if require_file_nonempty "$prompt_file" "prompt.md"; then
+        # Heuristic: a file that is just whitespace/template comments fails.
+        # We treat "fewer than 5 non-blank, non-comment lines" as effectively empty.
+        local meaningful
+        meaningful=$(grep -cE '^[[:space:]]*[^[:space:]<#-]' "$prompt_file" || true)
+        if [ "${meaningful:-0}" -lt 5 ]; then
+            add_warning "prompt.md looks like an unfilled template (very few content lines)"
+        fi
+    fi
+
+    # ---- proposal.md ----
+    if require_file_nonempty "$proposal_file" "proposal.md"; then
+        require_h2 "$proposal_file" "Goal"
+        require_h2 "$proposal_file" "Boundary Definition"
+        require_h2 "$proposal_file" "Phase Overview"
+    fi
+
+    # ---- phases/PH-*.md ----
+    if [ ! -d "$phases_dir" ]; then
+        add_error "phases/ directory is missing" "$phases_dir"
+    else
+        local phase_count=0
+        # shellcheck disable=SC2012
+        for phase_file in "$phases_dir"/PH-*.md; do
+            [ -e "$phase_file" ] || continue
+            phase_count=$((phase_count + 1))
+            if require_file_nonempty "$phase_file" "phase plan $(basename "$phase_file")"; then
+                require_h2 "$phase_file" "Files to Modify"
+                require_h2 "$phase_file" "Sub-tasks"
+                require_h2 "$phase_file" "Test Cases"
+            fi
+        done
+        if [ "$phase_count" -eq 0 ]; then
+            add_error "no phase plan files found (expected phases/PH-*.md)" "$phases_dir"
+        fi
+    fi
+
+    # ---- status.json ----
+    if [ ! -f "$status_file" ]; then
+        add_error "status.json is missing" "$status_file"
+        return
+    fi
+    if ! jq empty "$status_file" >/dev/null 2>&1; then
+        add_error "status.json is not valid JSON" "$status_file"
+        return
+    fi
+
+    local stage qcp branch change_dir_field current_phase phases_len
+    stage=$(jq -r '.stage // ""' "$status_file")
+    qcp=$(jq -r '.question_checkpoint // ""' "$status_file")
+    branch=$(jq -r '.branch // ""' "$status_file")
+    change_dir_field=$(jq -r '.change_dir // ""' "$status_file")
+    current_phase=$(jq -r '.current_phase // ""' "$status_file")
+    phases_len=$(jq '(.phases // []) | length' "$status_file")
+
+    [ "$stage" = "proposing" ] || \
+        add_error "status.json.stage must be \"proposing\" (got: \"$stage\")" "$status_file"
+    [ "$qcp" = "3" ] || \
+        add_error "status.json.question_checkpoint must be 3 (got: \"$qcp\")" "$status_file"
+    [ -n "$branch" ] || \
+        add_error "status.json.branch is empty" "$status_file"
+    [ -n "$change_dir_field" ] || \
+        add_error "status.json.change_dir is empty" "$status_file"
+    [ -n "$current_phase" ] || \
+        add_error "status.json.current_phase is empty" "$status_file"
+    [ "$phases_len" -gt 0 ] || \
+        add_error "status.json.phases[] must be non-empty" "$status_file"
+}
+
+###############################################################################
+# 5. Dispatch
+###############################################################################
+case "$GATE" in
+    refining-to-proposing)
+        gate_refining_to_proposing
+        ;;
+    *)
+        echo "validate-artifacts: unsupported gate: $GATE" >&2
+        echo "supported gates: refining-to-proposing" >&2
+        exit 1
+        ;;
+esac
+
+emit_result_and_exit

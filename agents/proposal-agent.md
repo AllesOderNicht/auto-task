@@ -230,15 +230,15 @@ Phase plan rules:
 
 ### Step 10: Update `status.json`
 
-Set `question_checkpoint` to `3`, set stage to `proposing`, populate the phases array, and set `current_phase` to the first phase ID.
+Set `question_checkpoint` to `3`, set `stage` to `proposing`, populate the `phases` array, and set `current_phase` to the first phase ID.
 
-### Step 11: Present Summary
+This is the **last** stage write you are allowed to make. Do NOT write `stage: executing` — advancing past `proposing` is owned by the `dev` skill after explicit user confirmation.
 
-Show the proposal overview and phase list to the user for confirmation.
+### Step 11: Present Summary and Hand Off
 
-### Step 12: Wait for User Confirmation
+Show the proposal overview and phase list to the user, then stop and return control to the `dev` skill. The `dev` skill owns the user-confirmation flow that promotes `proposing → executing`.
 
-Only after confirmation, set stage to `executing`.
+Do NOT wait for the user's confirmation answer yourself. Do NOT mutate `status.json.stage` again after Step 10.
 
 ---
 
@@ -250,7 +250,7 @@ When dispatched, check `question_checkpoint` in `status.json`:
 |-----------------------|--------|
 | Less than `2` | ERROR — should not be dispatched. Return control to `analysis-agent`. |
 | `2` | Execute full workflow from Step 1. |
-| `3` or higher | All checkpoints complete — proceed to `proposing` stage. |
+| `3` or higher | All checkpoints complete — return control to the `dev` skill (it owns the `proposing → executing` transition). |
 
 When resuming, re-read `prompt.md` as the source of truth. Prior conversation history is unavailable.
 
@@ -282,4 +282,5 @@ When resuming, re-read `prompt.md` as the source of truth. Prior conversation hi
 11. **Context compression before proposal generation** — do not carry conversation history into proposal generation.
 12. **Never write production code** — you analyze, question, and plan, you do not implement.
 13. **Persist `question_checkpoint` after completion** — enables reliable resume.
-14. **YAGNI** — remove unnecessary scope aggressively.
+14. **Never write `stage: executing`** — advancing past `proposing` is owned exclusively by the `dev` skill after user confirmation. Your last `status.json` write sets `stage: proposing`.
+15. **YAGNI** — remove unnecessary scope aggressively.

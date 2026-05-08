@@ -43,7 +43,7 @@ init → prompting → refining → proposing → executing → verifying
 ### Stage: `refining`
 
 - **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
-- **Invoke skill `harness-task:brainstorming`** — the brainstorming skill dispatches two specialized subagents with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3). The `analysis-agent` handles checkpoints 1–2 (requirement clarification), then the `proposal-agent` handles checkpoint 3 (code-first gap analysis and proposal generation).
+- **Invoke skill `harness-task:refining-orchestrator`** — the refining-orchestrator skill dispatches two specialized subagents with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3). The `analysis-agent` handles checkpoints 1–2 (requirement clarification), then the `proposal-agent` handles checkpoint 3 (code-first gap analysis and proposal generation).
 - **Checkpoint 1 — Prompt-Input Clarification** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, tool budget: 15 code-reading calls, NO subagent):
   - Agent reads `prompt.md` (user's raw requirements) and explores the codebase to build context.
   - Agent asks at least 3 prompt-input questions (AskQuestion, single batch). Assumes the user has not read the code.
@@ -61,7 +61,10 @@ init → prompting → refining → proposing → executing → verifying
   - Agent generates per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
   - Agent updates `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
 - **After Checkpoint 3, immediately continue to `proposing` stage below.**
-- **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 3`.
+- **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 3`. In addition, before presenting the proposal to the user, run the artifact validator:
+  - Execute `hooks/validate-artifacts --change-dir <abs-path-to-.dev-changes/{safe-branch-dir}> --gate refining-to-proposing` via the Bash tool.
+  - Exit code `0`: proceed to the `proposing` stage.
+  - Non-zero exit code: the validator prints a structured JSON error to stderr listing the missing files / fields / H2 sections. Surface that error to the user verbatim and STOP — do not advance the stage. Re-invoke `harness-task:refining-orchestrator` to repair the artifacts, then re-run the validator.
 
 ### Stage: `proposing`
 

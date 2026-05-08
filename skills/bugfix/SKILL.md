@@ -16,7 +16,7 @@ Invoke this skill when ALL of these are true:
 
 Do NOT invoke this skill for:
 - Build errors during normal TDD cycles (handle in `harness-task:executing`).
-- Requirement changes or scope expansions (restart brainstorming instead).
+- Requirement changes or scope expansions (restart the `harness-task:refining-orchestrator` skill instead).
 - Bugs in infrastructure or tooling unrelated to the current change.
 
 ## Prerequisites
