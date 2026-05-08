@@ -34,7 +34,7 @@ init → prompting → refining → proposing → executing → verifying
 |-------|-------------|
 | **init** | Create or switch to the target branch, then initialize `.dev-changes/{branch}`, `prompt.md`, and `status.json` |
 | **prompting** | The user writes `prompt.md`, optionally supported by PRDs, technical docs, screenshots, or other source material |
-| **refining** | Three question checkpoints progressively clarify scope, fill gaps, and validate the real execution boundary |
+| **refining** | Four question checkpoints (three first-principles requirement categories driven by analysis-agent + one proposal-transition checkpoint by proposal-agent) progressively clarify scope, fill gaps, and validate the real execution boundary |
 | **proposing** | Deep code reading produces `proposal.md` and `phases/PH-*.md`, then waits for confirmation |
 | **executing** | The main agent implements phase by phase, invoking team skills / base skills, reviewing each phase, and compressing context between phases |
 | **verifying** | Final validation confirms the result, delivery boundary, and readiness for archive or bugfix |
@@ -203,15 +203,16 @@ The purpose is not to duplicate each archive, but to distill them into project-l
 
 ## Key Mechanisms
 
-### Three question checkpoints
+### Four question checkpoints
 
-The workflow does not jump directly from prompt to proposal. The `refining` stage must pass through three checkpoints:
+The workflow does not jump directly from prompt to proposal. The `refining` stage must pass through four checkpoints, the first three of which are driven by `analysis-agent` (one per question category, with unbounded multi-round Q&A inside each category) and the last by `proposal-agent`:
 
-1. first questions after prompt input
-2. follow-up questions after the first answers
-3. final transition questions before proposal generation
+1. **Category 1 — Overall framing**: new vs. modify, reuse points, sub-project decomposition, history compatibility.
+2. **Category 2 — Feature breakdown + code boundaries**: feature-point list, per-feature module/file-level boundaries.
+3. **Category 3 — Coherence + open design**: cross-feature coupling, industry-standard alternatives, residual open questions; `prompt.md` is rewritten with a `Feature Breakdown` section.
+4. **Proposal transition**: code-first gap analysis followed by `proposal.md` and per-phase plans.
 
-Each checkpoint asks at least three questions before the workflow is allowed to move forward.
+Each round asks 3–5 questions; rounds within a category are unbounded — the agent keeps asking until the category's closure criteria pass.
 
 ### Resume from interruption
 

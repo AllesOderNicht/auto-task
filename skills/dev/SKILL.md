@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Start or resume a development change. Orchestrates the 6-stage workflow — init, prompting, refining, proposing, executing, verifying — with checkpoint-based question refinement.
+description: Start or resume a development change. Orchestrates the 6-stage workflow — init, prompting, refining, proposing, executing, verifying — with four checkpoint-based question categories during refining.
 user-invocable: true
 ---
 
@@ -43,25 +43,29 @@ init → prompting → refining → proposing → executing → verifying
 ### Stage: `refining`
 
 - **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
-- **Invoke skill `harness-task:refining-orchestrator`** — the refining-orchestrator skill dispatches two specialized subagents with isolated context to drive three question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3). The `analysis-agent` handles checkpoints 1–2 (requirement clarification), then the `proposal-agent` handles checkpoint 3 (code-first gap analysis and proposal generation).
-- **Checkpoint 1 — Prompt-Input Clarification** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, tool budget: 15 code-reading calls, NO subagent):
-  - Agent reads `prompt.md` (user's raw requirements) and explores the codebase to build context.
-  - Agent asks at least 3 prompt-input questions (AskQuestion, single batch). Assumes the user has not read the code.
-  - Agent updates `status.json`: set `question_checkpoint` to `1`. Stage remains `refining`.
-- **Checkpoint 2 — Follow-up Clarification** (`question_checkpoint`: 1 → 2, agent: `analysis-agent`, tool budget: 5 targeted re-reads, NO subagent):
-  - Agent analyzes Checkpoint 1 answers for divergence points (ambiguity, code-intent conflict, missing decisions).
-  - Agent asks at least 3 follow-up questions (AskQuestion, single batch).
-  - Agent updates `prompt.md` with refined requirements from both rounds.
-  - Agent updates `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
-- **Checkpoint 3 — Proposal Transition** (`question_checkpoint`: 2 → 3, agent: `proposal-agent`, tool budget: 10 + explore subagents):
-  - Agent deeply reads the codebase and systematically analyzes `prompt.md` for gaps against the actual code.
+- **Invoke skill `harness-task:refining-orchestrator`** — the refining-orchestrator skill dispatches two specialized subagents with isolated context to drive four question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3 → 4). The `analysis-agent` handles checkpoints 1–3 (one per question category, multi-round per category), then the `proposal-agent` handles checkpoint 4 (code-first gap analysis and proposal generation).
+- **Checkpoint 1 — Category 1: Overall Framing** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+  - Agent reads `prompt.md` + `status.json` and explores the codebase to build context for Category 1.
+  - Agent runs unbounded rounds (3–5 questions per round) covering: scope assessment & sub-project decomposition, new-feature vs. modification judgement, reuse points (for new features), modification scope (for modifications), history compatibility. Per-round state (`current_question_category`, `round_in_category`) is persisted.
+  - Agent appends Category 1 decisions to `prompt.md` and updates `status.json`: set `question_checkpoint` to `1`, clear per-category scratch. Stage remains `refining`.
+- **Checkpoint 2 — Category 2: Feature Breakdown + Code Boundaries** (`question_checkpoint`: 1 → 2, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+  - Agent proposes the feature point list by walking the code (user does NOT invent the breakdown).
+  - For each feature point, agent asserts the code modification boundary at the module/file level — user does NOT confirm boundaries, only feature-point intent and unclear cases.
+  - Agent runs unbounded rounds until every feature point has a boundary recorded and every flagged ambiguity is resolved.
+  - Agent appends Category 2 decisions to `prompt.md` and updates `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
+- **Checkpoint 3 — Category 3: Coherence + Open Design** (`question_checkpoint`: 2 → 3, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+  - Agent runs unbounded rounds covering: cross-feature coherence, industry-standard alternative patterns vs. the codebase pattern, residual open questions.
+  - Agent rewrites `prompt.md` from scratch using the four-section template (Context / Sub-projects / Requirements / Scope) plus a new `## Feature Breakdown` section with per-feature 方案摘要 / 代码修改边界 / 设计思想 / 边界情况 / 关键 case / 用户操作路径.
+  - Agent updates `status.json`: set `question_checkpoint` to `3`. Stage remains `refining`.
+- **Checkpoint 4 — Proposal Transition** (`question_checkpoint`: 3 → 4, agent: `proposal-agent`, tool budget: 10 + explore subagents):
+  - Agent deeply reads the codebase and systematically analyzes the rewritten `prompt.md` for gaps against the actual code.
   - Agent asks at least 3 proposal-transition questions grounded in code evidence before generating artifacts.
   - Agent compresses prior context, reads updated `prompt.md` as single source of truth.
   - Agent generates `proposal.md` (product-level: module names + interfaces, NO file paths, MUST/MUST NOT/MAY boundaries).
   - Agent generates per-phase plan files (`phases/PH-{n}.md`) as self-contained technical specs (no estimated line counts).
-  - Agent updates `status.json`: set `question_checkpoint` to `3`, set stage to `proposing`, populate phases array.
-- **After Checkpoint 3, immediately continue to `proposing` stage below.**
-- **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 3`. In addition, before presenting the proposal to the user, run the artifact validator:
+  - Agent updates `status.json`: set `question_checkpoint` to `4`, set stage to `proposing`, populate phases array.
+- **After Checkpoint 4, immediately continue to `proposing` stage below.**
+- **Gate**: stage CANNOT advance from `refining` to `proposing` unless `question_checkpoint === 4`. In addition, before presenting the proposal to the user, run the artifact validator:
   - Execute `hooks/validate-artifacts --change-dir <abs-path-to-.dev-changes/{safe-branch-dir}> --gate refining-to-proposing` via the Bash tool.
   - Exit code `0`: proceed to the `proposing` stage.
   - Non-zero exit code: the validator prints a structured JSON error to stderr listing the missing files / fields / H2 sections. Surface that error to the user verbatim and STOP — do not advance the stage. Re-invoke `harness-task:refining-orchestrator` to repair the artifacts, then re-run the validator.
@@ -107,7 +111,7 @@ When `/alles-dev` is invoked and `status.json` already exists:
 |---------------|--------|
 | `init` | Advance to `prompting` |
 | `prompting` | Check prompt.md, advance if filled |
-| `refining` | Check `question_checkpoint` in `status.json` to determine resume point: `0` → Checkpoint 1 via `analysis-agent` (prompt-input questions), `1` → Checkpoint 2 via `analysis-agent` (follow-up questions), `2` → Checkpoint 3 via `proposal-agent` (code-first gap analysis, proposal-transition questions, and proposal generation). Each checkpoint gate ensures correct ordering. |
+| `refining` | Check `question_checkpoint` in `status.json` to determine resume point: `0` → Checkpoint 1 via `analysis-agent` (Category 1: overall framing), `1` → Checkpoint 2 via `analysis-agent` (Category 2: feature breakdown + boundaries), `2` → Checkpoint 3 via `analysis-agent` (Category 3: coherence + open design + prompt.md rewrite), `3` → Checkpoint 4 via `proposal-agent` (code-first gap analysis, proposal-transition questions, and proposal generation). Within each category, `current_question_category` and `round_in_category` in `status.json` enable mid-category resume. Each checkpoint gate ensures correct ordering. |
 | `proposing` | Proposal and phase plans already exist. Present proposal to user for confirmation. If files are missing, go back to `refining` and restart. |
 | `executing` | Find current phase from `status.json`, resume execution. If phases were reset by a bugfix (earlier phases completed but later ones pending), this is a post-bugfix resume — continue normally from `current_phase`. |
 | `verifying` | Re-run verification |
@@ -119,7 +123,7 @@ When `/alles-dev` is invoked and `status.json` already exists:
   "branch": "feature/my-change",
   "change_dir": "feature-my-change",
   "stage": "executing",
-  "question_checkpoint": 3,
+  "question_checkpoint": 4,
   "created_at": "2026-04-02T00:00:00.000Z",
   "updated_at": "2026-04-02T01:00:00.000Z",
   "current_phase": "PH-2",
@@ -133,9 +137,10 @@ When `/alles-dev` is invoked and `status.json` already exists:
 
 **`question_checkpoint` values:**
 - `0` or absent: question checkpoints not started
-- `1`: Checkpoint 1 (prompt-input clarification) completed
-- `2`: Checkpoint 2 (follow-up clarification) completed
-- `3`: Checkpoint 3 (proposal transition) completed — all checkpoints done, stage can advance
+- `1`: Checkpoint 1 (Category 1 — overall framing) completed
+- `2`: Checkpoint 2 (Category 2 — feature breakdown + code boundaries) completed
+- `3`: Checkpoint 3 (Category 3 — coherence + open design, `prompt.md` rewritten) completed
+- `4`: Checkpoint 4 (proposal transition) completed — all checkpoints done, stage can advance
 
 ## Commit Format
 
@@ -151,7 +156,7 @@ Examples:
 1. **Never skip the startup hook** — it must run before anything else.
 2. **Never skip stages** — always follow the linear progression.
 3. **Always persist stage changes** to `status.json` immediately.
-4. **Three question checkpoints are mandatory** — each checkpoint updates `question_checkpoint` in `status.json` (1/2/3). Each checkpoint must ask at least 3 questions. Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 3`.
+4. **Four question checkpoints are mandatory** — each checkpoint updates `question_checkpoint` in `status.json` (1/2/3/4). `analysis-agent` runs unbounded multi-round Q&A within each of Categories 1–3 (3–5 questions per round); `proposal-agent` runs Checkpoint 4. Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 4`.
 5. **Always wait for user confirmation** before advancing from `proposing` to `executing`.
 6. **Main agent executes phases directly** — write code, run tests, and generate summaries yourself. No delegation to execution subagents.
 7. **TDD is mandatory** in every phase during `executing`.

@@ -23,7 +23,7 @@ init → prompting → refining → proposing → executing → verifying
 |-------|-------------|
 | `init` | Create branch + directory + empty prompt.md |
 | `prompting` | User fills in prompt.md with requirements |
-| `refining` | Three question checkpoints execute here, tracked by `question_checkpoint` (0/1/2/3). Checkpoints 1–2 driven by `analysis-agent`: prompt-input questions (>=3), follow-up questions (>=3), update prompt.md. Checkpoint 3 driven by `proposal-agent`: deep code reading, gap analysis against prompt.md, proposal-transition questions (>=3), then generate proposal.md + phase plans. Stage advances only when `question_checkpoint === 3`. |
+| `refining` | Four question checkpoints execute here, tracked by `question_checkpoint` (0/1/2/3/4). Checkpoints 1–3 driven by `analysis-agent` — one per question category, each with unbounded multi-round Q&A (3–5 questions per round): Category 1 (overall framing + sub-project decomposition + reuse + history compatibility), Category 2 (feature breakdown + per-feature code modification boundaries), Category 3 (cross-feature coherence + open-ended design exploration; `prompt.md` rewritten with `Feature Breakdown`). Checkpoint 4 driven by `proposal-agent`: deep code reading, gap analysis against the rewritten `prompt.md`, proposal-transition questions (>=3), then generate proposal.md + phase plans. Stage advances only when `question_checkpoint === 4`. |
 | `proposing` | User confirmation stage — present proposal, wait for user approval before proceeding |
 | `executing` | Main agent executes phases directly with TDD, generates summaries, compresses context between phases |
 | `verifying` | Final TDD verification + handoff |
@@ -33,7 +33,7 @@ init → prompting → refining → proposing → executing → verifying
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | `harness-task:dev` | `/alles-dev [branch-name]` | Start or resume a development change |
-| `harness-task:refining-orchestrator` | (sub-skill) | Three checkpoint-based question stages (all checkpoints within refining stage, tracked by question_checkpoint) |
+| `harness-task:refining-orchestrator` | (sub-skill) | Four checkpoint-based question stages (all checkpoints within refining stage, tracked by question_checkpoint) |
 | `harness-task:executing` | (sub-skill) | Phase-by-phase execution with TDD |
 | `harness-task:tdd` | (sub-skill) | Red-Green-Refactor enforcement |
 | `harness-task:bugfix` | `/alles-bugfix` | Zero-trust bug investigation during executing/verifying |
@@ -52,10 +52,10 @@ At session start, the following are automatically injected:
 ## Key Rules
 
 1. **Always check for active changes** before starting new work.
-2. **Three question checkpoints are mandatory** — Checkpoint 1 (prompt-input questions >=3), Checkpoint 2 (follow-up questions >=3), Checkpoint 3 (proposal-transition questions >=3, then proposal + phase plans). All execute within the `refining` stage.
-3. **Each checkpoint is tracked** — `question_checkpoint` in `status.json` (0→1→2→3). Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 3`.
-4. **Never skip the question checkpoints** — even "simple" changes need all three checkpoints.
-5. **Resumable via `question_checkpoint`** — if interrupted during `refining`, check `question_checkpoint` to resume from the correct checkpoint.
+2. **Four question checkpoints are mandatory** — Checkpoint 1 (Category 1: overall framing + sub-project decomposition), Checkpoint 2 (Category 2: feature breakdown + per-feature code boundaries), Checkpoint 3 (Category 3: coherence + open design, `prompt.md` rewritten with `Feature Breakdown`), Checkpoint 4 (proposal-transition questions, then proposal + phase plans). Categories 1–3 use unbounded multi-round Q&A (3–5 questions per round) until each category's closure criteria pass. All execute within the `refining` stage.
+3. **Each checkpoint is tracked** — `question_checkpoint` in `status.json` (0→1→2→3→4). Stage cannot advance from `refining` to `proposing` unless `question_checkpoint === 4`.
+4. **Never skip the question checkpoints** — even "simple" changes need all four checkpoints.
+5. **Resumable via `question_checkpoint`** — if interrupted during `refining`, check `question_checkpoint` to resume from the correct checkpoint. Within a category, `current_question_category` and `round_in_category` enable round-level resume.
 6. **Main agent executes phases directly** — write code, run tests, and generate summaries yourself. No delegation to execution subagents.
 7. **TDD is mandatory** during every phase of execution.
 8. **Phase Preamble is mandatory** — every phase starts by reading proposal, summaries, and phase plan from files. Never rely on conversation history from previous phases.
@@ -90,10 +90,10 @@ At session start, the following are automatically injected:
 
 | Thought | Reality |
 |---------|---------|
-| "This is too simple for structured questions" | Simple changes have unexamined assumptions. Complete all three question checkpoints. |
-| "I'll skip refining and go straight to proposing" | All three question checkpoints must complete (`question_checkpoint === 3`) before advancing. |
-| "I'll skip the follow-up questions and go straight to proposal" | Each checkpoint is gated: Checkpoint 2 requires `question_checkpoint >= 1`, Checkpoint 3 requires `question_checkpoint >= 2`. No skipping. |
-| "I'll ask everything at once" | The checkpoints have different goals. Checkpoint 1 asks prompt-input questions, Checkpoint 2 resolves follow-up ambiguities, Checkpoint 3 asks proposal-transition questions. Each checkpoint still needs at least 3 questions. |
+| "This is too simple for structured questions" | Simple changes have unexamined assumptions. Complete all four question checkpoints. |
+| "I'll skip refining and go straight to proposing" | All four question checkpoints must complete (`question_checkpoint === 4`) before advancing. |
+| "I'll skip the follow-up questions and go straight to proposal" | Each checkpoint is gated: Checkpoint N requires `question_checkpoint >= N-1`. No skipping. |
+| "I'll ask everything at once" | The checkpoints have different goals. Categories 1–3 each tackle one dimension (framing / breakdown+boundaries / coherence+open-design); within each category, rounds are unbounded — keep asking until the closure criteria pass. Checkpoint 4 covers proposal transition. |
 | "The proposal should list specific files" | Proposal is a product-level document. Use module names and interfaces, never file paths. File details go in phase plans. |
 | "A short task list is enough for each phase" | Phase plans must be self-contained with files, data structures, test pseudo-code, edge cases, no-touch list, and TDD approach — without estimated line counts. |
 | "Tests can come later" | TDD is mandatory. No production code without failing test. |

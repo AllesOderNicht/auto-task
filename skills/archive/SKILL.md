@@ -136,7 +136,7 @@ Branch: {kept / deleted}
   "branch": "feature/my-change",
   "change_dir": "feature-my-change",
   "stage": "verifying",
-  "question_checkpoint": 3,
+  "question_checkpoint": 4,
   "created_at": "2026-04-02T00:00:00.000Z",
   "updated_at": "2026-04-02T01:00:00.000Z",
   "archived": true,

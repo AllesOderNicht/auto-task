@@ -17,9 +17,18 @@ set -euo pipefail
 #         Definition, Phase Overview
 #       - phases/PH-*.md contains at least one file; each must contain H2
 #         sections: Files to Modify, Sub-tasks, Test Cases
-#       - status.json: stage === "proposing", question_checkpoint === 3,
+#       - status.json: stage === "proposing", question_checkpoint === 4,
 #         phases[] is non-empty, branch / change_dir / current_phase are
 #         non-empty strings
+#
+# Checkpoint scheme (refining → proposing):
+#   CP1 = analysis-agent closes question category 1 (overall framing + reuse
+#         + sub-project decomposition + history compatibility).
+#   CP2 = analysis-agent closes category 2 (feature breakdown + per-feature
+#         code modification boundaries).
+#   CP3 = analysis-agent closes category 3 (cross-feature coherence + open
+#         design questions); prompt.md is rewritten with Feature Breakdown.
+#   CP4 = proposal-agent finished (proposal.md + phases/PH-*.md generated).
 #
 # Exit codes:
 #   0 = pass
@@ -221,8 +230,8 @@ gate_refining_to_proposing() {
 
     [ "$stage" = "proposing" ] || \
         add_error "status.json.stage must be \"proposing\" (got: \"$stage\")" "$status_file"
-    [ "$qcp" = "3" ] || \
-        add_error "status.json.question_checkpoint must be 3 (got: \"$qcp\")" "$status_file"
+    [ "$qcp" = "4" ] || \
+        add_error "status.json.question_checkpoint must be 4 (got: \"$qcp\")" "$status_file"
     [ -n "$branch" ] || \
         add_error "status.json.branch is empty" "$status_file"
     [ -n "$change_dir_field" ] || \

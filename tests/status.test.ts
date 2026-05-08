@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   STAGE_ORDER,
   QUESTION_CHECKPOINT_TOTAL,
+  CODE_READS_LOG_MAX,
+  CODE_READS_LOG_KEEP,
   createInitialStatus,
   updateStage,
   getNextStage,
@@ -14,7 +16,10 @@ import {
   updatePhaseReview,
   advanceQuestionCheckpoint,
   hasCompletedQuestionCheckpoints,
+  resetCategoryState,
+  appendCodeReadLog,
 } from '../src/utils/status.js';
+import type { CodeReadLogEntry } from '../src/utils/status.js';
 
 describe('STAGE_ORDER', () => {
   it('defines the 6-stage workflow', () => {
@@ -297,7 +302,7 @@ describe('advanceQuestionCheckpoint', () => {
     expect(updated.question_checkpoint).toBe(1);
   });
 
-  it('increments through all 3 question checkpoints', () => {
+  it('increments through all 4 question checkpoints', () => {
     let status = createInitialStatus('b', 'd');
     status = updateStage(status, 'refining');
     status = advanceQuestionCheckpoint(status);
@@ -306,11 +311,14 @@ describe('advanceQuestionCheckpoint', () => {
     expect(status.question_checkpoint).toBe(2);
     status = advanceQuestionCheckpoint(status);
     expect(status.question_checkpoint).toBe(3);
+    status = advanceQuestionCheckpoint(status);
+    expect(status.question_checkpoint).toBe(4);
   });
 
   it('does not increment beyond the total checkpoint count', () => {
     let status = createInitialStatus('b', 'd');
     status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
@@ -337,6 +345,39 @@ describe('advanceQuestionCheckpoint', () => {
     expect(updated.question_checkpoint).toBe(3);
     expect('brainstorming_round' in updated).toBe(false);
   });
+
+  it('clears per-category scratch fields when checkpoint advances', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = {
+      ...status,
+      current_question_category: 1,
+      round_in_category: 4,
+    };
+
+    const updated = advanceQuestionCheckpoint(status);
+
+    expect(updated.question_checkpoint).toBe(1);
+    expect(updated.current_question_category).toBeUndefined();
+    expect(updated.round_in_category).toBeUndefined();
+  });
+
+  it('preserves code_reads_log across checkpoint advances', () => {
+    const entry: CodeReadLogEntry = {
+      category: 1,
+      round: 1,
+      count: 6,
+      over_budget: true,
+      at: new Date().toISOString(),
+    };
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = { ...status, code_reads_log: [entry] };
+
+    const updated = advanceQuestionCheckpoint(status);
+
+    expect(updated.code_reads_log).toEqual([entry]);
+  });
 });
 
 describe('hasCompletedQuestionCheckpoints', () => {
@@ -345,16 +386,19 @@ describe('hasCompletedQuestionCheckpoints', () => {
     expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
   });
 
-  it('returns false when question_checkpoint is less than 3', () => {
+  it('returns false when question_checkpoint is less than 4', () => {
     let status = createInitialStatus('b', 'd');
+    status = advanceQuestionCheckpoint(status);
+    expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
     status = advanceQuestionCheckpoint(status);
     expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
     status = advanceQuestionCheckpoint(status);
     expect(hasCompletedQuestionCheckpoints(status)).toBe(false);
   });
 
-  it('returns true when question_checkpoint equals 3', () => {
+  it('returns true when question_checkpoint equals 4', () => {
     let status = createInitialStatus('b', 'd');
+    status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
@@ -364,7 +408,7 @@ describe('hasCompletedQuestionCheckpoints', () => {
   it('treats legacy brainstorming_round as checkpoint progress', () => {
     const status = {
       ...createInitialStatus('b', 'd'),
-      brainstorming_round: 3,
+      brainstorming_round: 4,
     };
 
     expect(hasCompletedQuestionCheckpoints(status)).toBe(true);
@@ -380,19 +424,21 @@ describe('updateStage with question checkpoint gate', () => {
     );
   });
 
-  it('throws when question_checkpoint is only 2', () => {
+  it('throws when question_checkpoint is only 3', () => {
     let status = createInitialStatus('b', 'd');
     status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     expect(() => updateStage(status, 'proposing')).toThrow(
-      /question_checkpoint is 2, must be 3/,
+      /question_checkpoint is 3, must be 4/,
     );
   });
 
-  it('allows advancing from refining to proposing when all 3 question checkpoints complete', () => {
+  it('allows advancing from refining to proposing when all 4 question checkpoints complete', () => {
     let status = createInitialStatus('b', 'd');
     status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
     status = advanceQuestionCheckpoint(status);
@@ -406,5 +452,127 @@ describe('updateStage with question checkpoint gate', () => {
     expect(status.stage).toBe('prompting');
     status = updateStage(status, 'refining');
     expect(status.stage).toBe('refining');
+  });
+});
+
+describe('resetCategoryState', () => {
+  it('clears current_question_category and round_in_category', () => {
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = {
+      ...status,
+      current_question_category: 2,
+      round_in_category: 3,
+    };
+
+    const updated = resetCategoryState(status);
+
+    expect(updated.current_question_category).toBeUndefined();
+    expect(updated.round_in_category).toBeUndefined();
+  });
+
+  it('preserves question_checkpoint and code_reads_log', () => {
+    const entry: CodeReadLogEntry = {
+      category: 2,
+      round: 1,
+      count: 3,
+      over_budget: false,
+      at: new Date().toISOString(),
+    };
+    let status = createInitialStatus('b', 'd');
+    status = updateStage(status, 'refining');
+    status = advanceQuestionCheckpoint(status);
+    status = {
+      ...status,
+      current_question_category: 2,
+      round_in_category: 1,
+      code_reads_log: [entry],
+    };
+
+    const updated = resetCategoryState(status);
+
+    expect(updated.question_checkpoint).toBe(1);
+    expect(updated.code_reads_log).toEqual([entry]);
+  });
+
+  it('strips legacy brainstorming_round if present', () => {
+    const status = {
+      ...createInitialStatus('b', 'd'),
+      brainstorming_round: 1,
+      current_question_category: 1 as const,
+      round_in_category: 2,
+    };
+
+    const updated = resetCategoryState(status);
+
+    expect('brainstorming_round' in updated).toBe(false);
+    expect(updated.current_question_category).toBeUndefined();
+  });
+});
+
+describe('appendCodeReadLog', () => {
+  const makeEntry = (round: number): CodeReadLogEntry => ({
+    category: 1,
+    round,
+    count: 4,
+    over_budget: false,
+    at: new Date(2026, 0, round).toISOString(),
+  });
+
+  it('appends an entry to an empty log', () => {
+    const status = createInitialStatus('b', 'd');
+    const entry = makeEntry(1);
+
+    const updated = appendCodeReadLog(status, entry);
+
+    expect(updated.code_reads_log).toEqual([entry]);
+  });
+
+  it('appends to an existing log without truncation when under cap', () => {
+    let status = createInitialStatus('b', 'd');
+    status = appendCodeReadLog(status, makeEntry(1));
+    status = appendCodeReadLog(status, makeEntry(2));
+
+    expect(status.code_reads_log).toHaveLength(2);
+    expect(status.code_reads_log?.[0].round).toBe(1);
+    expect(status.code_reads_log?.[1].round).toBe(2);
+  });
+
+  it('truncates to the most recent CODE_READS_LOG_KEEP entries when exceeding CODE_READS_LOG_MAX', () => {
+    let status = createInitialStatus('b', 'd');
+    // pre-populate at exactly the cap
+    const seed: CodeReadLogEntry[] = [];
+    for (let i = 1; i <= CODE_READS_LOG_MAX; i++) {
+      seed.push(makeEntry(i));
+    }
+    status = { ...status, code_reads_log: seed };
+
+    // appending one more should trigger truncation to KEEP entries
+    status = appendCodeReadLog(status, makeEntry(CODE_READS_LOG_MAX + 1));
+
+    expect(status.code_reads_log).toHaveLength(CODE_READS_LOG_KEEP);
+    // most-recent semantics: last entry must be the just-appended one
+    expect(status.code_reads_log?.[CODE_READS_LOG_KEEP - 1].round).toBe(
+      CODE_READS_LOG_MAX + 1,
+    );
+    // first entry after truncation is at index (MAX + 1) - KEEP + 1
+    expect(status.code_reads_log?.[0].round).toBe(
+      CODE_READS_LOG_MAX + 1 - CODE_READS_LOG_KEEP + 1,
+    );
+  });
+
+  it('marks over_budget entries as over_budget', () => {
+    const status = createInitialStatus('b', 'd');
+    const entry: CodeReadLogEntry = {
+      category: 1,
+      round: 1,
+      count: 8,
+      over_budget: true,
+      at: new Date().toISOString(),
+    };
+
+    const updated = appendCodeReadLog(status, entry);
+
+    expect(updated.code_reads_log?.[0].over_budget).toBe(true);
   });
 });

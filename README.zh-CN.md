@@ -32,7 +32,7 @@ init → prompting → refining → proposing → executing → verifying
 |------|------|
 | **init** | 创建或切换到目标分支，初始化 `.dev-changes/{branch}`、`prompt.md`、`status.json` |
 | **prompting** | 用户编写 `prompt.md`，也可以结合 PRD、技术文档、截图等输入原始需求 |
-| **refining** | 通过 3 轮问题检查点逐步澄清边界、补齐遗漏、校验需求真实性 |
+| **refining** | 通过 4 个问题检查点（前 3 个由 analysis-agent 按第一性原理分类多轮提问，第 4 个由 proposal-agent 完成 proposal 过渡）逐步澄清边界、补齐遗漏、校验需求真实性 |
 | **proposing** | 深读代码并产出 `proposal.md` 与 `phases/PH-*.md`，等待确认 |
 | **executing** | 主 agent 按 phase 执行代码实现，调用团队 skill / base skill，并在每个 phase 结束后进行审查与上下文压缩 |
 | **verifying** | 最终验证结果、确认交付边界、准备归档或进入 bugfix 流程 |
@@ -201,15 +201,16 @@ bugfix 不再是一次随意补丁，而是一次受状态机约束的正式回�
 
 ## 关键机制
 
-### 三个提问检查点
+### 四个提问检查点
 
-在 `refining` 阶段，流程不会直接从 prompt 跳到 proposal，而是必须经过 3 个检查点：
+在 `refining` 阶段，流程不会直接从 prompt 跳到 proposal，而是必须经过 4 个检查点。前 3 个由 `analysis-agent` 驱动（每个对应一个问题类别，类别内允许不限轮数的多轮提问），第 4 个由 `proposal-agent` 驱动：
 
-1. prompt 输入后的第一轮问题
-2. 第一轮回答后的跟进问题
-3. refine 转 proposal 前的最终过渡问题
+1. **类别 1 — 总体需求梳理**：新功能 vs. 修改判别、复用点探索、子项目拆分、历史兼容性。
+2. **类别 2 — 功能点划分 + 代码修改边界**：功能点列表、每个功能点的模块/文件级修改边界。
+3. **类别 3 — 连贯性 + 开放设计**：跨功能点耦合、业界最优方案对照、未决问题；同时按新模板重写 `prompt.md`，新增 `Feature Breakdown` 章节。
+4. **Proposal 过渡**：基于代码的 gap 分析，随后生成 `proposal.md` 与各 phase 计划。
 
-每一轮至少提出 3 个问题，只有完成后流程才能前进。
+每轮提问 3–5 题；同一类别内的轮数不设上限——agent 会一直追问直到该类别的收口判定通过。
 
 ### 断点续跑
 
