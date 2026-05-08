@@ -51,7 +51,7 @@ Gather the inputs needed by the dispatched agent:
 
 | Agent | Code-reading guideline | Subagent allowed? |
 |-------|------------------------|-------------------|
-| `analysis-agent` | Soft guideline: ≤ 5 calls per question round (unbounded rounds per category). Rounds that exceed it append a `code_reads_log` entry with `over_budget: true`; never aborts. | No |
+| `analysis-agent` | Soft guideline: < 10 calls per question round (unbounded rounds per category). Rounds that exceed it append a `code_reads_log` entry with `over_budget: true`; never aborts. | No |
 | `proposal-agent` | Hard cap: 10 direct code-reading calls. | Yes (`explore` subagents allowed and encouraged) |
 
 ### Step 3: Dispatch the Agent
@@ -67,7 +67,7 @@ You are the analysis-agent operating on change "{branch-name}".
 - Change directory: {absolute change directory path}
 - question_checkpoint: {0, 1, or 2}
 - Active question category: {1 if cp=0; 2 if cp=1; 3 if cp=2}
-- Code-reading guideline: soft cap of 5 calls per round; unbounded rounds per category. Append a `code_reads_log` entry on excess. Subagents are forbidden.
+- Code-reading guideline: soft guideline of < 10 calls per round; unbounded rounds per category. Append a `code_reads_log` entry on excess. Subagents are forbidden.
 
 ## Project Context
 {content of .harness-task/context.md, or "(not provided)"}

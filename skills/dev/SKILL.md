@@ -44,16 +44,16 @@ init → prompting → refining → proposing → executing → verifying
 
 - **Prerequisite**: `prompt.md` must already contain the user's requirements (filled during the `prompting` stage). Do NOT enter this stage with an empty prompt.
 - **Invoke skill `harness-task:refining-orchestrator`** — the refining-orchestrator skill dispatches two specialized subagents with isolated context to drive four question checkpoints, tracked by `question_checkpoint` in `status.json` (0 → 1 → 2 → 3 → 4). The `analysis-agent` handles checkpoints 1–3 (one per question category, multi-round per category), then the `proposal-agent` handles checkpoint 4 (code-first gap analysis and proposal generation).
-- **Checkpoint 1 — Category 1: Overall Framing** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+- **Checkpoint 1 — Category 1: Overall Framing** (`question_checkpoint`: 0 → 1, agent: `analysis-agent`, code-reading guideline: < 10 calls per round, NO subagent):
   - Agent reads `prompt.md` + `status.json` and explores the codebase to build context for Category 1.
   - Agent runs unbounded rounds (3–5 questions per round) covering: scope assessment & sub-project decomposition, new-feature vs. modification judgement, reuse points (for new features), modification scope (for modifications), history compatibility. Per-round state (`current_question_category`, `round_in_category`) is persisted.
   - Agent appends Category 1 decisions to `prompt.md` and updates `status.json`: set `question_checkpoint` to `1`, clear per-category scratch. Stage remains `refining`.
-- **Checkpoint 2 — Category 2: Feature Breakdown + Code Boundaries** (`question_checkpoint`: 1 → 2, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+- **Checkpoint 2 — Category 2: Feature Breakdown + Code Boundaries** (`question_checkpoint`: 1 → 2, agent: `analysis-agent`, code-reading guideline: < 10 calls per round, NO subagent):
   - Agent proposes the feature point list by walking the code (user does NOT invent the breakdown).
   - For each feature point, agent asserts the code modification boundary at the module/file level — user does NOT confirm boundaries, only feature-point intent and unclear cases.
   - Agent runs unbounded rounds until every feature point has a boundary recorded and every flagged ambiguity is resolved.
   - Agent appends Category 2 decisions to `prompt.md` and updates `status.json`: set `question_checkpoint` to `2`. Stage remains `refining`.
-- **Checkpoint 3 — Category 3: Coherence + Open Design** (`question_checkpoint`: 2 → 3, agent: `analysis-agent`, code-reading guideline: ~5 calls per round, NO subagent):
+- **Checkpoint 3 — Category 3: Coherence + Open Design** (`question_checkpoint`: 2 → 3, agent: `analysis-agent`, code-reading guideline: < 10 calls per round, NO subagent):
   - Agent runs unbounded rounds covering: cross-feature coherence, industry-standard alternative patterns vs. the codebase pattern, residual open questions.
   - Agent rewrites `prompt.md` from scratch using the four-section template (Context / Sub-projects / Requirements / Scope) plus a new `## Feature Breakdown` section with per-feature 方案摘要 / 代码修改边界 / 设计思想 / 边界情况 / 关键 case / 用户操作路径.
   - Agent updates `status.json`: set `question_checkpoint` to `3`. Stage remains `refining`.
