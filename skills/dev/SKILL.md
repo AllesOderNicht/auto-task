@@ -82,16 +82,17 @@ init → prompting → refining → proposing → executing → verifying
 - **Invoke skill `harness-task:executing`** — the main agent executes each phase directly.
 - For each phase:
   0. **Phase Preamble**: reload context from files — read `proposal.md` + completed phase summaries from `status.json` + current `phases/PH-{n}.md`. Do NOT reference prior conversation history.
-  1. Execute tasks with TDD (invoke `harness-task:tdd`). The main agent writes all code directly with full access to skills and rules.
-  2. Update `status.json`: mark phase completed, write summary string.
-  3. **Adversarial review** (invoke `harness-task:phase-review`):
+  1. **Discover available skills, rules, and MCP tools** from the IDE environment (`.codebuddy/`, `.cursor/`, `.claude/` directories and active MCP session). Apply relevant ones encountered during task execution — do not assume a fixed list.
+  2. Execute tasks with TDD (invoke `harness-task:tdd`). The main agent writes all code directly, applying discovered rules as constraints and invoking discovered skills/MCP tools at their natural trigger points.
+  3. Update `status.json`: mark phase completed, write summary string.
+  4. **Adversarial review** (invoke `harness-task:phase-review`):
      - A `phase-reviewer` subagent is spawned with isolated context (only prompt.md + proposal.md + production code diff).
      - The reviewer scores the code across 6 weighted dimensions (7.0/10 pass threshold).
      - If score < 7.0: reviewer fixes code, a new reviewer re-evaluates (up to 3 rounds).
      - If 3 rounds fail: execution halts, user must decide how to proceed.
-     - Review granularity adapts: <= 8 changed files = phase-level review; > 8 files = per-task review during Step 1.
-  4. **Context compression**: use compact tool if available; otherwise treat prior conversation as unavailable.
-  5. Advance `current_phase` to the next pending phase.
+     - Review granularity adapts: <= 8 changed files = phase-level review; > 8 files = per-task review during Step 2.
+  5. **Context compression**: use compact tool if available; otherwise treat prior conversation as unavailable.
+  6. Advance `current_phase` to the next pending phase.
 - When all phases are completed, advance stage to `verifying`.
 
 **Bug Reports**: If the user reports a bug during execution (describes unexpected behavior, test failures, or incorrect output), **stop current execution** and invoke `harness-task:bugfix`. The bugfix skill dispatches a zero-trust `bug-investigator` agent that independently audits all artifacts, discusses findings with the user, then patches proposal/phase files and resets `status.json`. After bugfix completes, resume executing from the reset phase.

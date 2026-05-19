@@ -2,6 +2,53 @@
 
 A team-oriented AI development workflow plugin for Cursor, Claude Code, and similar AI IDEs.
 
+## Installation
+
+### npx (no install required)
+
+```bash
+# Auto-detect installed AI IDE and install workflow assets
+npx harness-task install
+
+# Install into CodeBuddy only
+npx harness-task install --codebuddy
+
+# Install into Claude Code / claude-internal only
+npx harness-task install --claude
+
+# Install into a specific project's .codebuddy
+npx harness-task install --codebuddy --project /path/to/your/project
+
+# Install into a custom target directory
+npx harness-task install --codebuddy --target /custom/.codebuddy
+npx harness-task install --claude --dir /custom/.claude-internal
+```
+
+### npm global install
+
+```bash
+npm install -g harness-task
+harness-task install
+```
+
+### npm local install (per project)
+
+```bash
+npm install --save-dev harness-task
+npx harness-task install --codebuddy --project .
+```
+
+### What gets installed
+
+| Platform | Skills | Agents | Commands |
+|----------|--------|--------|----------|
+| **CodeBuddy** | `harness-task-*` (11 skills) | `harness-task-*` (4 agents) | `/alles-dev`, `/alles-bugfix`, `/alles-archive`, `/alles-details`, `/alles-list-changes`, `/review` |
+| **Claude Code** | `harness-task:*` (11 skills via symlink) | — | all commands via symlink |
+
+After installation, reload the IDE plugins (`/reload-plugins` in CodeBuddy, or restart Claude Code).
+
+---
+
 It is not trying to be just another stronger personal skill. It is a framework for teams that need AI coding to be traceable, recoverable, collaborative, and maintainable over time.
 
 ## Why This Exists

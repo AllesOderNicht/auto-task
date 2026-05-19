@@ -13,10 +13,11 @@ set -euo pipefail
 #     Asserts that the proposal-agent has produced everything required for the
 #     dev skill to safely advance from `refining` to `proposing`:
 #       - prompt.md exists and is non-empty (not the bare template)
-#       - proposal.md exists and contains H2 sections: Goal, Boundary
-#         Definition, Phase Overview
-#       - phases/PH-*.md contains at least one file; each must contain H2
-#         sections: Files to Modify, Sub-tasks, Test Cases
+#       - proposal.md exists and contains H1 sections: Goal, Constraints,
+#         Plan, and H2 section: Phase Overview
+#       - phases/PH-*.md contains at least one file; each must contain H1
+#         sections: Plan, 涉及的 files, Skill、Rule, and H2 section: Sub-tasks,
+#         Test Cases
 #       - status.json: stage === "proposing", question_checkpoint === 4,
 #         phases[] is non-empty, branch / change_dir / current_phase are
 #         non-empty strings
@@ -153,6 +154,16 @@ require_file_nonempty() {
     return 0
 }
 
+# require_h1 <abs-path> <heading-text>
+# Looks for a line starting with `# <heading>` (Markdown H1).
+require_h1() {
+    local f="$1"
+    local heading="$2"
+    if ! grep -qE "^#[[:space:]]+${heading}([[:space:]]|$|:)" "$f"; then
+        add_error "missing H1 section: ${heading}" "$f"
+    fi
+}
+
 # require_h2 <abs-path> <heading-text>
 # Looks for a line starting with `## <heading>` (Markdown H2).
 require_h2() {
@@ -185,8 +196,9 @@ gate_refining_to_proposing() {
 
     # ---- proposal.md ----
     if require_file_nonempty "$proposal_file" "proposal.md"; then
-        require_h2 "$proposal_file" "Goal"
-        require_h2 "$proposal_file" "Boundary Definition"
+        require_h1 "$proposal_file" "Goal"
+        require_h1 "$proposal_file" "Constraints"
+        require_h1 "$proposal_file" "Plan"
         require_h2 "$proposal_file" "Phase Overview"
     fi
 
@@ -200,7 +212,9 @@ gate_refining_to_proposing() {
             [ -e "$phase_file" ] || continue
             phase_count=$((phase_count + 1))
             if require_file_nonempty "$phase_file" "phase plan $(basename "$phase_file")"; then
-                require_h2 "$phase_file" "Files to Modify"
+                require_h1 "$phase_file" "Plan"
+                require_h1 "$phase_file" "涉及的 files"
+                require_h1 "$phase_file" "Skill、Rule"
                 require_h2 "$phase_file" "Sub-tasks"
                 require_h2 "$phase_file" "Test Cases"
             fi

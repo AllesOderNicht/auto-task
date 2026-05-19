@@ -149,8 +149,32 @@ Treat prior conversation as unavailable. Re-read the updated `prompt.md` as the 
 ```markdown
 # Proposal: {title}
 
-## Goal
-<!-- What this change achieves, 2–3 sentences -->
+Role: {1-2 sentences defining the model's function, context, and job}
+
+# Personality
+{tone, demeanor, and collaboration style}
+
+# Goal
+{user-visible outcome — what this change achieves, 2–3 sentences}
+
+# Success criteria
+{what must be true before the final answer}
+
+# Constraints
+{policy, safety, business, evidence, and side-effect limits}
+<!-- Include Boundary Definition here:
+     MUST: {in-scope requirement}
+     MUST NOT: {out-of-scope constraint}
+     MAY: {nice-to-have} -->
+
+# Output
+{sections, length, and tone}
+
+# Stop rules
+{when to retry, fallback, abstain, ask, or stop}
+
+# Plan
+<!-- 说明每个 phase 和 sub-phase 的功能、要求，保证所有的 phase 都是一个完整的功能 -->
 
 ## Background
 <!-- Current system state and motivation -->
@@ -162,29 +186,27 @@ Treat prior conversation as unavailable. Re-read the updated `prompt.md` as the 
 <!-- Module-level design decisions, key interfaces, design patterns chosen -->
 <!-- Module names and interface signatures are allowed; NO file paths -->
 
-## Boundary Definition
-### In Scope (MUST)
-- MUST: {requirement}
-
-### Out of Scope (MUST NOT)
-- MUST NOT: {constraint}
-
-### Optional (MAY)
-- MAY: {nice-to-have}
-
-## Risks & Uncertain Points
-<!-- What could go wrong, mitigation, open questions deferred to phase execution -->
-
 ## Phase Overview
 | Phase | Title | Description |
 |-------|-------|-------------|
 | PH-1  | {title} | {one sentence} |
+
+### PH-1: {Phase Title}
+- **功能**: {what this phase delivers to the user}
+- **要求**: {specific requirements and acceptance criteria}
+- Sub-phases:
+  - {n}.1 {sub-phase name}: {功能描述}
+  - {n}.2 {sub-phase name}: {功能描述}
+
+## Risks & Uncertain Points
+<!-- What could go wrong, mitigation, open questions deferred to phase execution -->
 ```
 
 Rules for `proposal.md`:
 - **No file paths** — module names and interface signatures only.
-- MUST / MUST NOT / MAY keywords explicit in Boundary Definition.
-- Phase Overview is titles + one-liners only — all detail lives in phase plans.
+- MUST / MUST NOT / MAY keywords explicit in the Constraints section.
+- Phase Overview table is titles + one-liners only; detail lives in the `# Plan` sub-sections.
+- Every phase in `# Plan` must describe a **complete, user-visible functional unit**.
 
 ## Step 8: Write Per-Phase Plans (`phases/PH-{n}.md`)
 
@@ -192,6 +214,50 @@ Each file is a fully self-contained specification — executable without reading
 
 ```markdown
 # PH-{n}: {Phase Title}
+
+Role: {1-2 sentences defining what this phase does and its context within the overall change}
+
+# Personality
+{tone, demeanor, and collaboration style for executing this phase}
+
+# Goal
+{user-visible outcome delivered by this phase}
+
+# Success criteria
+{what must be true before this phase is considered complete}
+
+# Constraints
+{policy, safety, business, evidence, and side-effect limits specific to this phase}
+<!-- MUST: {hard requirements}
+     MUST NOT: {forbidden actions — e.g., MUST NOT break existing serialization format}
+     MAY: {optional approaches} -->
+
+# Output
+{what artifacts, code, or behaviors this phase produces}
+
+# Stop rules
+{when to retry, fallback, abstain, ask, or stop during execution}
+
+# Plan
+<!-- 说明每个 sub-phase 的功能、要求 -->
+- {n}.1 **{Sub-phase Name}**: {功能描述和要求}
+- {n}.2 **{Sub-phase Name}**: {功能描述和要求}
+
+# 涉及的 files
+<!-- 说明重点文件列表 -->
+| File | Action | Purpose |
+|------|--------|---------|
+| {path} | CREATE / MODIFY / DELETE | {why} |
+
+# Skill、Rule
+<!-- 预计将会使用到的 skill 和 rule -->
+| Item | Type | When to Apply |
+|------|------|---------------|
+| `harness-task:tdd` | skill | each sub-task RED→GREEN→REFACTOR cycle |
+| `harness-task:phase-review` | skill | after all sub-tasks complete |
+| {lint rule or MCP tool} | rule / mcp | {trigger condition} |
+
+---
 
 ## Context Summary
 <!-- PH-1: goal + technical approach from proposal -->
@@ -204,11 +270,6 @@ Each file is a fully self-contained specification — executable without reading
      - What does it depend on? (explicit deps only)
      If you cannot answer all three, the boundary needs adjustment. -->
 
-## Files to Modify
-| File | Action | Purpose |
-|------|--------|---------|
-| {path} | CREATE / MODIFY / DELETE | {why} |
-
 ## Data Structure Design
 <!-- New or modified types, interfaces, enums, DB schemas -->
 <!-- Include before/after if modifying existing structures -->
@@ -220,13 +281,6 @@ Each file is a fully self-contained specification — executable without reading
 <!-- Front–back API shape (route, method, request schema, response schema, error codes) -->
 <!-- Internal module interfaces (function signatures, event shapes) -->
 <!-- Omit section if no new interfaces -->
-
-## Skills / Rules / MCPs
-| Item | Type | When to Apply |
-|------|------|---------------|
-| `harness-task:tdd` | skill | each sub-task RED→GREEN→REFACTOR cycle |
-| `harness-task:phase-review` | skill | after all sub-tasks complete |
-| {lint rule or MCP tool} | rule / mcp | {trigger condition} |
 
 ## Uncertain / Risky Points
 | Point | Risk Level | Mitigation |
@@ -277,6 +331,7 @@ Phase plan rules:
 - No estimated line counts.
 - Order phases by dependency (foundational first).
 - If an existing file is oversized or has mixed responsibilities and sits in the change path, note it in **Isolation & Clarity Check** and add a targeted split/extraction sub-task.
+- The `# Plan` section must describe every sub-phase as a **complete, independently testable unit**.
 
 ## Step 9: Update `status.json`
 
@@ -320,7 +375,7 @@ Show the proposal goal and phase list to the user, then stop and return control 
 5. **Questions are unbounded.** Run as many rounds as needed; ≥ 2 questions per round; any format.
 6. **Questions must cite code evidence** — no abstract questions.
 7. **Phase plans are self-contained.** Each plan is executable without reading other plans.
-8. **Phase plans must cover all six dimensions:** files, data structures, design patterns, interfaces, skills/rules/MCPs, test cases, user paths, MUST/MUST NOT.
+8. **Phase plans must cover all required sections:** `# Plan` (sub-phase breakdown), `# 涉及的 files` (file list), `# Skill、Rule` (skills/rules/MCPs), data structures, design patterns, interfaces, test cases, user paths, MUST/MUST NOT.
 9. **`prompt.md` after Step 5 is the sole source of truth** for proposal and phase generation.
 10. **No file paths in `proposal.md`.** Module names and interface signatures only.
 11. **Never write production code.** Analyze, question, plan — do not implement.

@@ -65,12 +65,14 @@ COMMAND_IDS=(
   "alles-list-changes"
   "alles-archive"
   "alles-details"
+  "alles-check"
   "review"
 )
 
 SKILL_IDS=(
   "archive"
   "bugfix"
+  "check"
   "dev"
   "executing"
   "list-changes"
@@ -96,6 +98,7 @@ command_description() {
     "alles-list-changes") echo "查看所有开发变更及其状态" ;;
     "alles-archive") echo "归档已完成的开发变更" ;;
     "alles-details") echo "从归档变更生成项目级注意事项" ;;
+    "alles-check") echo "执行预执行规划评审，从三个维度检查方案" ;;
     "review") echo "对开发变更执行结构化代码审查" ;;
     *) echo "执行 harness-task 工作流命令" ;;
   esac
@@ -105,6 +108,7 @@ command_argument_hint() {
   case "$1" in
     "alles-dev") echo "[branch-name]" ;;
     "alles-bugfix") echo "[bug symptoms]" ;;
+    "alles-check") echo "[branch-name]" ;;
     "review") echo "[branch-name]" ;;
     *) echo "" ;;
   esac
@@ -123,6 +127,7 @@ text = src.read_text(encoding="utf-8")
 skill_ids = [
     "archive",
     "bugfix",
+    "check",
     "dev",
     "executing",
     "list-changes",

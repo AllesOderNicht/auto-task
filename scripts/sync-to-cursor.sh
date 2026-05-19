@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用法: bash scripts/sync-to-cursor.sh
+# 在项目根目录执行，将插件源码同步到 Cursor/Claude 插件缓存目录，并更新 installed_plugins.json。
+# 同步完成后，重新打开 Cursor/Claude 窗口（或新建对话）以加载最新版本。
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

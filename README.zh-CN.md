@@ -2,6 +2,53 @@
 
 面向 Cursor、Claude Code 等 AI IDE 的团队化开发工作流插件。
 
+## 安装
+
+### npx（无需预安装）
+
+```bash
+# 自动检测已安装的 AI IDE，安装工作流资源
+npx harness-task install
+
+# 仅安装到 CodeBuddy
+npx harness-task install --codebuddy
+
+# 仅安装到 Claude Code / claude-internal
+npx harness-task install --claude
+
+# 安装到指定项目的 .codebuddy
+npx harness-task install --codebuddy --project /path/to/your/project
+
+# 安装到自定义目录
+npx harness-task install --codebuddy --target /custom/.codebuddy
+npx harness-task install --claude --dir /custom/.claude-internal
+```
+
+### npm 全局安装
+
+```bash
+npm install -g harness-task
+harness-task install
+```
+
+### npm 本地安装（按项目）
+
+```bash
+npm install --save-dev harness-task
+npx harness-task install --codebuddy --project .
+```
+
+### 安装内容
+
+| 平台 | Skills | Agents | Commands |
+|------|--------|--------|----------|
+| **CodeBuddy** | `harness-task-*`（11 个） | `harness-task-*`（4 个） | `/alles-dev`、`/alles-bugfix`、`/alles-archive`、`/alles-details`、`/alles-list-changes`、`/review` |
+| **Claude Code** | `harness-task:*`（11 个，符号链接） | — | 所有命令（符号链接） |
+
+安装完成后，在 CodeBuddy 中执行 `/reload-plugins` 或重启 Claude Code 来加载新插件。
+
+---
+
 它不是再造一个更强的单人 skill，而是为团队提供一套可追踪、可回退、可协作、可持续演进的 AI coding 框架。
 
 ## 为什么要做这个

@@ -5,7 +5,7 @@ description: Phase executor. Main agent runs each phase directly with TDD, gener
 
 # Executing — Phase-by-Phase Implementation
 
-This skill drives the `executing` stage. The **main agent** executes each phase directly — writing code, running tests, generating summaries — with full access to all skills and rules. It processes one phase at a time, enforcing TDD, and triggering adversarial code review before advancing.
+This skill drives the `executing` stage. The **main agent** executes each phase directly — writing code, running tests, generating summaries — with full access to all skills, rules, and MCP tools. It processes one phase at a time, enforcing TDD, and triggering adversarial code review before advancing.
 
 ## Phase Execution Loop
 
@@ -26,27 +26,49 @@ Do NOT reference conversation content from previous phases. Your working context
 
 - Update `status.json`: set current phase to `in_progress`.
 - Read the current phase's tasks from `phases/PH-{n}.md`.
+- **Discover available skills, rules, and MCP tools** from the IDE environment (do this once per phase):
+  - **Skills**: scan `~/.codebuddy/skills/`, `.codebuddy/skills/`, `~/.cursor/skills/`, `.cursor/skills/`, `~/.claude/skills/` for installed skills. Note each skill's name and description.
+  - **Rules**: scan `~/.codebuddy/rules/`, `.codebuddy/rules/`, `.cursor/rules/`, `.claude/rules/` for rule files. Read each rule's content to understand when it applies.
+  - **MCP tools**: check available MCP servers/tools currently registered in the IDE session.
+  - This discovery is **lazy and opportunistic** — you do not need to read every file upfront; discover as you encounter relevant tasks.
 
 ### 2. Execute Tasks with TDD
 
-You (the main agent) execute all tasks directly. You have full access to all harness-task skills and project rules.
+You (the main agent) execute all tasks directly. You have full access to all harness-task skills, project rules, and MCP tools.
+
+**Before starting each task**, reason about which installed skills, rules, and MCP tools are relevant:
+- **Skills**: if a discovered skill's purpose matches the current task (e.g., a linting skill, a code-generation skill, a database migration skill), invoke it. Prefer invoking skills over reimplementing what they already do.
+- **Rules**: if a discovered rule applies to the files or patterns you are about to modify (e.g., a naming convention rule, an architecture rule, a security rule), treat it as a hard constraint throughout implementation and refactor.
+- **MCP tools**: if a discovered MCP tool can assist with the current task (e.g., a code search tool, a schema validator, a test runner integration), invoke it at the appropriate point.
+- **Harness-task skills** (`harness-task:tdd`, `harness-task:phase-review`, etc.) always take precedence and are invoked per their own protocols regardless of other discovered skills.
 
 For each task in the current phase:
 
 1. **Invoke `harness-task:tdd`** — follow Red-Green-Refactor:
    - **RED**: Write a failing test for the task's behavior.
    - **GREEN**: Write minimal implementation to pass.
-   - **REFACTOR**: Clean up while keeping tests green.
-2. **Commit** after each task or logical group:
+   - **REFACTOR**: Clean up while keeping tests green. Apply any relevant rules during this step.
+2. **Apply rules and invoke MCP tools / skills** as determined above:
+   - **Rules**: enforce as hard constraints, especially during REFACTOR. If a rule conflicts with the minimal-code principle of GREEN, defer it to REFACTOR.
+   - **MCP tools**: invoke at the appropriate trigger point. Record the tool name and outcome in the task completion note.
+   - **Skills**: invoke at their natural trigger point within the task.
+3. **Commit** after each task or logical group:
    - Format: `{type}({scope}): description [{branch-name}]`
-3. **Per-task review (large phases only)**: If the phase has > 8 changed files, invoke `harness-task:phase-review` after each task's TDD cycle. See Step 3.5 for details.
+4. **Update `phases/PH-{n}.md`**: After each task's TDD cycle and commit, mark the task as completed in the phase file. Append a `[x]` checkbox or a completion note directly in the task list, and include a brief one-line outcome (files changed, what was done, any extra skills/rules/MCPs applied). Example:
+   ```
+   - [x] Task: Add login handler — src/auth.ts: login handler added, tests pass; security-rule applied; mcp:schema-validator invoked (passed)
+   ```
+5. **Per-task review (large phases only)**: If the phase has > 8 changed files, invoke `harness-task:phase-review` after each task's TDD cycle. See Step 3.5 for details.
 
 ### 3. Update Status with Summary
 
-After all tasks in a phase are complete, update `status.json`:
-- Mark phase as `completed`.
-- Write a **minimal** `summary` string: file changes with one-line descriptions, pipe-separated.
-  Example: `"src/auth.ts: added login handler | tests/auth.test.ts: login unit tests"`
+After all tasks in a phase are complete:
+
+1. Update `phases/PH-{n}.md`: confirm all tasks are marked completed (every task should already have a `[x]` from Step 2). If any task is missing a completion mark, add it now.
+2. Update `status.json`:
+   - Mark phase as `completed`.
+   - Write a **minimal** `summary` string: file changes with one-line descriptions, pipe-separated.
+     Example: `"src/auth.ts: added login handler | tests/auth.test.ts: login unit tests"`
 
 ### 3.5. Phase Review — Adversarial Code Evaluation
 
@@ -120,8 +142,11 @@ If execution was interrupted (conversation ended mid-phase):
 2. **One phase at a time** — never work on multiple phases simultaneously.
 3. **TDD is mandatory** — no production code without a failing test first. Invoke `harness-task:tdd`.
 4. **Commit after each task** — small, atomic commits.
-5. **Minimal summaries** — file changes + one-line descriptions only.
-6. **Review is mandatory** — every phase must pass adversarial review (via `phase-reviewer` subagent) before advancing.
-7. **Phase Preamble is mandatory** — every phase starts with Step 0: read proposal, summaries, and phase plan from files.
-8. **Context compression is a hard gate** — after each phase, you MUST compress context before starting the next phase's Preamble. No exceptions. The next phase relies only on files for context, never on conversation history.
-9. **User can abort** — if the user says stop, persist current progress and stop.
+5. **Update `phases/PH-{n}.md` after each task** — mark the task `[x]` with a one-line outcome immediately after commit. This file is both readable and writable during execution.
+6. **Minimal summaries** — file changes + one-line descriptions only.
+7. **Review is mandatory** — every phase must pass adversarial review (via `phase-reviewer` subagent) before advancing.
+8. **Phase Preamble is mandatory** — every phase starts with Step 0: read proposal, summaries, and phase plan from files.
+9. **Context compression is a hard gate** — after each phase, you MUST compress context before starting the next phase's Preamble. No exceptions. The next phase relies only on files for context, never on conversation history.
+10. **User can abort** — if the user says stop, persist current progress and stop.
+11. **Discover, don't assume** — do not assume which skills, rules, or MCP tools are available. Discover them from the IDE environment (`.codebuddy/`, `.cursor/`, `.claude/` directories and active MCP session) at the start of each phase. Apply all relevant ones encountered during task execution.
+12. **Harness-task skills take precedence** — `harness-task:tdd`, `harness-task:phase-review`, `harness-task:bugfix` are always invoked per their own protocols. User-installed skills complement but never override these.

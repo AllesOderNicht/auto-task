@@ -105,13 +105,12 @@ Per round:
 ### Category 1 — Overall Framing
 
 Round 1 must cover **all** of:
-- **Scope & sub-project decomposition.** If prompt describes multiple independent subsystems, Round 1 Question 1 must offer: A) single change, B) decompose + this change = sub-project #1, C) decompose + user picks order, D) 其他. If decomposition chosen, all subsequent questions and the final `prompt.md` scope to the chosen sub-project.
 - **New vs. modify.** Options must reference actual code found (e.g., "nothing in `src/` matches" vs. "existing impl at `src/foo/bar.ts`").
 - **Reuse points (new feature).** Propose: extract abstraction / parametrize existing module / copy-and-modify / build fresh — cite trade-offs from senior engineer + industry-standard perspective.
 - **Modification scope (modification).** Minimal patch vs. broad refactor vs. tiered rollout; cite affected files.
 - **History compatibility.** MUST/MUST NOT options grounded in observed call sites.
 
-**Closure criteria:** new-vs-modify answered; reuse decision or modification scope locked; history compatibility posture locked; sub-project scope resolved; no agent "unsure" notes.
+**Closure criteria:** new-vs-modify answered; reuse decision or modification scope locked; history compatibility posture locked; no agent "unsure" notes.
 
 ### Category 2 — Feature Breakdown + Code Boundaries
 
@@ -163,6 +162,28 @@ Rewrite `prompt.md` from scratch using this template (merge prior decisions, do 
 ```markdown
 # Prompt
 - Branch: `{branch-name}`
+
+Role: {1-2 sentences defining the model's function, context, and job}
+
+# Personality
+{tone, demeanor, and collaboration style}
+
+# Goal
+{user-visible outcome}
+
+# Success criteria
+{what must be true before the final answer}
+
+# Constraints
+{policy, safety, business, evidence, and side-effect limits}
+
+# Output
+{sections, length, and tone}
+
+# Stop rules
+{when to retry, fallback, abstain, ask, or stop}
+
+---
 
 ## Context
 <!-- Project layout, key modules, observed patterns -->

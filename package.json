@@ -1,19 +1,52 @@
 {
-  "name": "harness-task",
+  "name": "@tencent/harness-task",
   "version": "2.0.0",
-  "description": "Structured 6-stage development workflow plugin for Claude Code and Cursor",
+  "description": "Structured 6-stage development workflow plugin for Claude Code and CodeBuddy",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "harness-task": "bin/harness-task.js"
+  },
+  "files": [
+    "bin/",
+    "agents/",
+    "commands/",
+    "hooks/",
+    "skills/",
+    "dist/",
+    "README.md",
+    "README.zh-CN.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
+  "keywords": [
+    "ai",
+    "workflow",
+    "claude",
+    "codebuddy",
+    "cursor",
+    "dev-workflow",
+    "ai-coding",
+    "harness",
+    "tdd",
+    "phase-based"
+  ],
   "devDependencies": {
     "@types/node": "^25.5.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "license": "MIT"
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/harness-task.git"
+  }
 }
