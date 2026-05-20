@@ -42,8 +42,8 @@ npx harness-task install --codebuddy --project .
 
 | 平台 | Skills | Agents | Commands |
 |------|--------|--------|----------|
-| **CodeBuddy** | `harness-task-*`（11 个） | `harness-task-*`（4 个） | `/alles-dev`、`/alles-bugfix`、`/alles-archive`、`/alles-details`、`/alles-list-changes`、`/review` |
-| **Claude Code** | `harness-task:*`（11 个，符号链接） | — | 所有命令（符号链接） |
+| **CodeBuddy** | `harness-task-*`（15 个） | `harness-task-*`（4 个） | `/alles-dev`、`/alles-bugfix`、`/alles-check`、`/alles-archive`、`/alles-details`、`/alles-list-changes`、`/review` |
+| **Claude Code** | `harness-task:*`（15 个，符号链接） | — | 所有命令（符号链接） |
 
 安装完成后，在 CodeBuddy 中执行 `/reload-plugins` 或重启 Claude Code 来加载新插件。
 
@@ -229,6 +229,7 @@ bugfix 不再是一次随意补丁，而是一次受状态机约束的正式回�
 |------|------|
 | `/alles-dev [分支名]` | 启动或恢复一个开发变更 |
 | `/alles-bugfix` | 在 `executing` 或 `verifying` 阶段进入 bugfix 流程 |
+| `/alles-check [分支名]` | 执行编码前的三视角规划评审（产品合理性、QA 边界预测、软件架构）|
 | `/alles-list-changes` | 查看所有变更及其状态 |
 | `/alles-archive` | 归档已完成的变更 |
 | `/alles-details` | 从所有归档变更生成 `project-details/NOTES.md` |

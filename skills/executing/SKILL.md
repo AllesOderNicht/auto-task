@@ -90,6 +90,13 @@ After all tasks in a phase are complete:
 - If more phases remain: advance `current_phase` to the next pending phase.
 - If all phases complete: update stage to `verifying`.
 
+**Architecture concern check (soft, non-blocking):**
+After a PASS, check the review result for architecture signals:
+- If `plan_compliance` score ≤ 6, or `code_quality` score ≤ 6, or `critical_issues` contains terms like "shallow", "seam", "coupling", "wrapper", "pass-through", or "no abstraction":
+  > "Phase review flagged architecture concerns (e.g., {brief summary from critical_issues}). Run `harness-task:architecture-deepening` to explore deepening opportunities before the next phase?"
+  
+  The user can skip. If they agree, invoke `harness-task:architecture-deepening` and resume the executing loop after it completes.
+
 ### 4. Context Compression — MANDATORY Gate Before Next Phase
 
 **This step is a hard gate: the next phase's Preamble (Step 0) MUST NOT begin until context compression is complete.**

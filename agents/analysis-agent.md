@@ -88,6 +88,14 @@ No prior conversation history is carried over — reconstruct context from `prom
 
 Before asking, you must be able to answer: What does existing code overlap with this requirement? Which patterns must the change follow? What architecture constraints apply?
 
+**Domain language check (soft, non-blocking):**
+After the standard code exploration above, also check for domain documentation:
+- If `CONTEXT.md` exists at the project root (or the relevant context file pointed to by `CONTEXT-MAP.md`), read it and record the defined terms as a **domain vocabulary reference**. Use these exact terms in your questions and options wherever applicable.
+- If `.harness-task/context.md` exists, read it for engineering conventions and architectural constraints.
+- If neither file exists, proceed normally — this check is optional.
+
+The goal of reading `CONTEXT.md` is to avoid asking the user to explain terms the project has already defined, and to detect when the user's intent uses language that conflicts with established definitions.
+
 ## Phase C: Category Loop (unbounded rounds)
 
 Per round:
@@ -101,6 +109,14 @@ Per round:
    ```
 2. Ask in a single batch via AskQuestion.
 3. Run closure check (Phase D). Closed → Phase D/E. Not closed → persist `round_in_category += 1`, continue.
+
+**Two additional rules for question composition (grill-with-docs discipline):**
+
+- **Code-first, ask second**: If a question can be answered by reading the codebase, read the code and answer it yourself — do not ask the user. Reserve questions for decisions only a human can make (intent, priority, trade-off preferences).
+- **Terminology conflict**: If a user's answer uses a term that conflicts with an existing definition in `CONTEXT.md` (or with the term as used in the codebase), interrupt the round flow and raise the conflict as a **standalone paragraph** before continuing with other questions:
+  > ⚠️ **Terminology conflict**: You said "{user term}", but `CONTEXT.md` defines it as "{existing definition}" (or the codebase uses it to mean "{code usage}"). Which is correct, or should we distinguish these as two separate concepts?
+  
+  Do not mix terminology conflicts into numbered question lists. Resolve the conflict first, then continue.
 
 ### Category 1 — Overall Framing
 
@@ -144,14 +160,26 @@ Round 1 must cover:
 
 If any rule fails → another round (no limit). If all pass:
 
-1. Append decisions block to `prompt.md` under `## Key Decisions / Checkpoint {N} Decisions`:
+1. **Domain document suggestions (soft, non-blocking — do before writing decisions):**
+
+   a. **CONTEXT.md update**: If this category's Q&A produced any new domain terms that are not yet in `CONTEXT.md` (or there is no `CONTEXT.md`), suggest updating the glossary:
+      > "This conversation clarified the term **{term}** as '{definition}'. Want me to add it to `CONTEXT.md`?"
+      
+      If the user agrees, update (or lazily create) `CONTEXT.md` immediately using the format in `harness-task:domain-docs`. If the user declines, proceed without updating.
+
+   b. **ADR suggestion**: If any decision made in this category meets all three ADR conditions — (1) hard to reverse, (2) surprising without context, (3) result of a real trade-off — offer to create an ADR:
+      > "The decision to {decision summary} seems worth recording as an ADR (hard to reverse, not obvious to future readers, genuine alternatives existed). Want me to create `docs/adr/{next-number}-{slug}.md`?"
+      
+      If the user agrees, create the ADR using the format in `harness-task:domain-docs`. If the user declines or the decision doesn't meet all three conditions, skip.
+
+2. Append decisions block to `prompt.md` under `## Key Decisions / Checkpoint {N} Decisions`:
    ```markdown
    ### Checkpoint {N} Decisions
    - Q: {question} → A: {answer} → Decision: {commitment}
    - Round count: {round_in_category}
    ```
-2. Call `advanceQuestionCheckpoint(status)` (increments counter, clears category scratch).
-3. Persist `status.json`. **Stop** — return control to orchestrator.
+3. Call `advanceQuestionCheckpoint(status)` (increments counter, clears category scratch).
+4. Persist `status.json`. **Stop** — return control to orchestrator.
 
 For Category 3, proceed to Phase E before stopping.
 

@@ -33,6 +33,9 @@ init → prompting → refining → proposing → executing → verifying
 - The startup hook just created the branch and directory.
 - Advance stage to `prompting` immediately.
 - Tell the user to fill in `prompt.md` with their requirements.
+- **Domain language check (soft, non-blocking)**: Check whether a `CONTEXT.md` or `CONTEXT-MAP.md` exists at the project root.
+  - If neither exists, briefly mention: "No domain glossary found. If this project has specific domain terms, consider using `harness-task:domain-docs` to create a `CONTEXT.md` — it helps the analysis agent ask better questions during `refining`."
+  - If either exists, silently proceed — no prompt needed.
 
 ### Stage: `prompting`
 
@@ -102,6 +105,10 @@ init → prompting → refining → proposing → executing → verifying
 - Run full test suite.
 - Review phase summaries in `status.json` against the original proposal.
 - Generate a final verification report.
+- **Architecture check (optional, soft):** After the verification report, count the number of new modules introduced by this change (from phase summaries). If the change introduced 3 or more new modules or significantly restructured existing ones, suggest:
+  > "This change introduced several new modules. Consider running `harness-task:architecture-deepening` to check for shallow modules before archiving — it's easier to deepen now than after future changes build on top."
+  
+  The user can skip. This does not block archiving.
 - The change is now complete.
 
 ## Resuming a Change

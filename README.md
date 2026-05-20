@@ -7,45 +7,48 @@ A team-oriented AI development workflow plugin for Cursor, Claude Code, and simi
 ### npx (no install required)
 
 ```bash
-# Auto-detect installed AI IDE and install workflow assets
-npx harness-task install
+# Auto-detect installed AI IDEs and install workflow assets into all of them
+npx @tencent/harness-task install
 
-# Install into CodeBuddy only
-npx harness-task install --codebuddy
+# Install into a specific IDE
+npx @tencent/harness-task install --codebuddy
+npx @tencent/harness-task install --claude
+npx @tencent/harness-task install --cursor
 
-# Install into Claude Code / claude-internal only
-npx harness-task install --claude
+# CodeBuddy: install into a specific project's .codebuddy
+npx @tencent/harness-task install --codebuddy --project /path/to/your/project
 
-# Install into a specific project's .codebuddy
-npx harness-task install --codebuddy --project /path/to/your/project
+# CodeBuddy: install into an exact target directory
+npx @tencent/harness-task install --codebuddy --target /custom/.codebuddy
 
-# Install into a custom target directory
-npx harness-task install --codebuddy --target /custom/.codebuddy
-npx harness-task install --claude --dir /custom/.claude-internal
+# Claude / Cursor: install into a custom directory
+npx @tencent/harness-task install --claude --dir /custom/.claude
+npx @tencent/harness-task install --cursor --dir /custom/.cursor
 ```
 
 ### npm global install
 
 ```bash
-npm install -g harness-task
+npm install -g @tencent/harness-task
 harness-task install
 ```
 
 ### npm local install (per project)
 
 ```bash
-npm install --save-dev harness-task
-npx harness-task install --codebuddy --project .
+npm install --save-dev @tencent/harness-task
+npx @tencent/harness-task install --codebuddy --project .
 ```
 
 ### What gets installed
 
 | Platform | Skills | Agents | Commands |
 |----------|--------|--------|----------|
-| **CodeBuddy** | `harness-task-*` (11 skills) | `harness-task-*` (4 agents) | `/alles-dev`, `/alles-bugfix`, `/alles-archive`, `/alles-details`, `/alles-list-changes`, `/review` |
-| **Claude Code** | `harness-task:*` (11 skills via symlink) | — | all commands via symlink |
+| **CodeBuddy** | `harness-task-*` (15 skills) | `harness-task-*` (4 agents) | `/alles-dev`, `/alles-bugfix`, `/alles-check`, `/alles-archive`, `/alles-details`, `/alles-list-changes`, `/review` |
+| **Claude Code** | `harness-task:*` (15 skills via symlink) | — | all commands via symlink |
+| **Cursor** | `harness-task-*` (15 skills) | — | all commands |
 
-After installation, reload the IDE plugins (`/reload-plugins` in CodeBuddy, or restart Claude Code).
+After installation, reload the IDE plugins (`/reload-plugins` in CodeBuddy, or restart Claude Code / Cursor).
 
 ---
 
@@ -231,6 +234,7 @@ The purpose is not to duplicate each archive, but to distill them into project-l
 |---------|-------------|
 | `/alles-dev [branch]` | Start or resume a development change |
 | `/alles-bugfix` | Enter the bugfix workflow during `executing` or `verifying` |
+| `/alles-check [branch]` | Pre-execution planning review: three-perspective analysis (product, QA, architecture) before any code is written |
 | `/alles-list-changes` | View all changes and their status |
 | `/alles-archive` | Archive a completed change |
 | `/alles-details` | Generate `project-details/NOTES.md` from archived changes |

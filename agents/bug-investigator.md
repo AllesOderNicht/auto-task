@@ -54,6 +54,28 @@ Build a trace from requirement → proposal → plan → code → test:
 
 Identify breaks in this chain — the bug lives where the chain is broken.
 
+### Step 2.5: Build a Feedback Loop (Phase 0 prerequisite)
+
+Before injecting any diagnostic logs, you must establish a **repeatable, agent-runnable pass/fail signal** for the bug.
+
+A pass/fail signal is anything that can be run without human interaction and produces a deterministic PASS or FAIL:
+
+1. A failing automated test (unit, integration, or e2e) that directly exercises the bug.
+2. A CLI script that feeds a fixture input and diffs the output against a known-good snapshot.
+3. A minimal harness that calls the buggy code path and asserts the incorrect behavior.
+
+**Why this matters**: Without a reproducible signal, injecting logs becomes guesswork — you cannot verify whether a log-based hypothesis is correct because you cannot reliably reproduce the failure. A feedback loop transforms debugging from observation into experimentation.
+
+**Minimum bar**: The signal must produce the failure mode **consistently** (or at a high enough rate to instrument against) before you proceed to Step 3.
+
+If you cannot construct such a signal from the existing test infrastructure:
+
+- Try writing a minimal failing test at the nearest testable seam.
+- If no seam exists, note the architectural gap (no correct test seam for this bug path).
+- If the bug is non-deterministic, try to raise the reproduction rate (run N times, add stress, pin timing).
+
+**Do not proceed to Step 3 (log injection) without a reproducible signal.** If you are genuinely unable to build one, stop here and report to the user: list what you tried and ask for either (a) a captured artifact (log dump, HAR file, screen recording with timestamps) or (b) permission to add temporary instrumentation to a staging/dev environment.
+
 ### Step 3: Inject Breakpoint Logs
 
 Before attempting to reproduce the bug, instrument the suspicious code paths with diagnostic log statements so runtime behavior becomes observable.

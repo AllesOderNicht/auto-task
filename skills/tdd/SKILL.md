@@ -215,7 +215,18 @@ Avoid these common pitfalls when writing tests:
 
 - **Testing mock behavior instead of real behavior** — If your test would pass even with a broken implementation, you're testing the mock, not the code.
 - **Adding test-only methods to production classes** — Production code should not be modified to make tests easier. Redesign the interface instead.
-- **Mocking without understanding dependencies** — Only mock boundaries (network, filesystem, clock). Internal functions should use real implementations.
+- **Mocking without understanding dependencies** — Only mock at true system boundaries (network, filesystem, clock, third-party services). Internal modules should use real implementations.
+- **Testing past the interface** — Tests should cross the module's public interface and assert on observable outcomes, not on internal state or private methods. If a test must reach inside the module, the interface is the wrong shape — redesign the interface.
+- **Shallow module tests** — A test that only verifies a module forwards calls to another module provides no value. Apply the deletion test: if deleting the module makes the test pass trivially, the module is a pass-through and either the test or the module needs redesign.
+
+## Deep-Module Testing Principles
+
+These principles complement TDD and are grounded in the architecture vocabulary from `harness-task:architecture-deepening`:
+
+- **The interface is the test surface.** Write tests that exercise the module's public interface. Tests should survive internal refactors — they describe behaviour, not implementation.
+- **Depth before mocks.** Before extracting a seam for testing purposes, ask whether the module can simply be deepened (more behaviour hidden behind the same interface). A deeper interface often removes the need for the mock entirely.
+- **Two-adapter rule.** If you introduce a seam (port/interface) for testing, you need a production adapter and a test adapter. A single-adapter seam is just indirection — it adds complexity without adding testability.
+- **Delete shallow tests when deepening.** When you deepen a cluster of modules and write tests at the new interface, delete the old shallow unit tests — they become redundant noise that breaks during refactoring without catching real bugs.
 
 ## When Stuck
 

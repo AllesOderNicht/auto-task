@@ -200,6 +200,12 @@ Role: {1-2 sentences defining the model's function, context, and job}
 
 ## Risks & Uncertain Points
 <!-- What could go wrong, mitigation, open questions deferred to phase execution -->
+<!-- ADR candidates: for any decision in this proposal that meets all three conditions —
+     (1) hard to reverse, (2) surprising without context, (3) result of a real trade-off —
+     mark it with [ADR candidate] and a one-line rationale. Example:
+     [ADR candidate] Choosing event sourcing over CRUD for the Order aggregate — hard to swap,
+     non-obvious to future readers, REST-based alternatives were considered and rejected.
+     After the proposal is confirmed, offer to create the corresponding ADR(s). -->
 ```
 
 Rules for `proposal.md`:

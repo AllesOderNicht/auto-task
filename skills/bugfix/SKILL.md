@@ -19,6 +19,19 @@ Do NOT invoke this skill for:
 - Requirement changes or scope expansions (restart the `harness-task:refining-orchestrator` skill instead).
 - Bugs in infrastructure or tooling unrelated to the current change.
 
+## Bug Type Triage — Choose the Right Path
+
+Before dispatching the `bug-investigator`, determine which type of bug this is. Ask the user if unclear.
+
+| Type | Indicators | Path |
+|------|-----------|------|
+| **Workflow bug** (use this skill) | Bug is in code written during the current executing workflow; fixing it requires re-running one or more phases; `status.json` needs to be rolled back | Continue with this skill → `bug-investigator` |
+| **General debug** (use `diagnose`) | Bug origin is unclear; pre-existing code is involved; performance regression; user says "diagnose this" or "debug this"; no phase rollback needed | Invoke `harness-task:diagnose` instead |
+
+**If this is a general debug situation**, invoke `harness-task:diagnose` and do not proceed further with this skill. The `diagnose` skill provides a structured six-phase investigation (feedback loop → reproduce → hypothesise → instrument → fix + regression test → cleanup) and is better suited for open-ended debugging.
+
+**If this is a workflow bug**, continue below.
+
 ## Prerequisites
 
 Before invoking:

@@ -129,6 +129,13 @@ Questions to consider:
 - Are the chosen design patterns appropriate for the scale and lifecycle of this feature?
 - Does the design meet the bar expected of a well-maintained open-source project (clear public API, separation of concerns, documented contracts)?
 
+**Deep-module lens (apply the following additional checks):**
+- **Depth check**: Apply the deletion test to each new or modified module. If you deleted the module, would complexity vanish (pass-through) or reappear across callers (earning its keep)? Flag any module that appears to be a shallow pass-through.
+- **Interface size**: Is the proposed interface minimal — does it expose only what callers need? Or does it leak internal state, implementation details, or configuration that callers shouldn't need to know?
+- **Seam placement**: Does the design introduce seams only where behaviour genuinely varies? Is there evidence of two distinct adapters (production + test) justifying each seam, or are seams being introduced as hypothetical structure?
+- **Locality**: Will bugs, changes, and knowledge about this concept be concentrated in one place after this change, or will they still scatter across callers?
+- **Test surface**: Can the proposed module be thoroughly tested through its interface, or would tests need to reach inside the implementation? If tests need to reach inside, the interface is the wrong shape.
+
 Output format for each concern:
 
 ```

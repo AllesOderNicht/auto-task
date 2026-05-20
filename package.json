@@ -1,6 +1,6 @@
 {
   "name": "@tencent/harness-task",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Structured 6-stage development workflow plugin for Claude Code and CodeBuddy",
   "type": "module",
   "main": "dist/index.js",
@@ -48,5 +48,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/your-org/harness-task.git"
+  },
+  "publishConfig": {
+    "registry": "http://mirrors.tencent.com/npm/",
+    "access": "public"
   }
 }
